@@ -14,24 +14,55 @@ allImages = []
 allPlaforms = []
 allLadders = []
 
+allObjs = []
+
 class Image(Box):
-	def __init__(self, rect, imagePath, name="", surface=screen, lists=[allImages]):
+	def __init__(self, rect, imagePath, name="", surface=screen, lists=[allImages, allObjs]):
 		super().__init__(rect, ((0, 0, 0), (0, 0, 0)), name, surface, drawData={"drawBackground": False}, lists=lists)
 
 		self.imagePath = imagePath
 
-		self.ScaleImage(pg.image.load(self.imagePath), (self.rect.w, self.rect.h))
+		self.ScaleImage(pg.image.load(self.imagePath) if self.imagePath != None else None, (self.rect.w, self.rect.h))
 
 	def Draw(self):
-		self.surface.blit(self.image, self.rect)
+		if self.image != None:
+			self.surface.blit(self.image, self.rect)
 
 	def ScaleImage(self, image, size):
-		self.image = pg.transform.scale(pg.image.load(self.imagePath), size)
+		if image != None:
+			self.image = pg.transform.scale(pg.image.load(self.imagePath), size)
+		else:
+			self.image = None
 
 
-class Camera(Button, Image):
-	def __init__(self, rect, colors, onClick=None, onClickArgs=[], text="", name="", surface=screen, drawData={}, textData={}, inputData={}, lists=[allButtons]):
-		def __init__(self, rect, imagePath, colors, onClick=None, onClickArgs=[], text="", inputData={}, name="", surface=screen)
+class Camera(Image):
+	def __init__(self, rect, imagePath, borderColor, name="", surface=screen):
+		super().__init__(rect, imagePath, name, surface, [])
+		self.borderColor = borderColor
+		self.isPlayerInCenter = False
+		self.defaultPos = (self.rect.x, self.rect.y)
+
+	def Draw(self):
+		self.DrawBorder()
+
+	def Move(self, pos):
+		self.rect.x = pos[0]
+		self.rect.y = pos[1]
+
+	def Update(self, player):
+		if player.rect.x + player.rect.w // 2 == width // 2:
+			self.isPlayerInCenter = True
+		elif player.rect.x + player.rect.w // 2 < width // 2:
+			self.isPlayerInCenter = False
+
+		if self.isPlayerInCenter:
+			self.Move((player.rect.x - self.rect.w // 2, self.rect.y))
+
+			for obj in allObjs:
+				obj.Move(player.rect)
+
+		else:
+			self.Move(self.defaultPos)
 
 
 class Collider:
@@ -43,8 +74,16 @@ class Collider:
 		return self.rect.colliderect(rect)
 
 
-class Platform(Box):
-	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allPlaforms]):
+class BoxObj(Box):
+	def __init__(self, rect, colors, name="", surface=screen, drawData={}, lists=[allObjs]):
+		super().__init__(rect, colors, name, surface, drawData, lists)
+
+	def Move(self, player):
+		self.rect.x = player.x - self.rect.w // 2
+
+
+class Platform(BoxObj):
+	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allPlaforms, allObjs]):
 		super().__init__(rect, colors, name, surface, drawData, lists)
 
 		self.image = Image(self.rect, imagePath, lists=[]) if imagePath != None else None
@@ -57,8 +96,8 @@ class Platform(Box):
 			self.image.Draw()
 
 
-class Ladder(Box):
-	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allLadders]):
+class Ladder(BoxObj):
+	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allLadders, allObjs]):
 		super().__init__(rect, colors, name, surface, drawData, lists)
 
 		self.image = Image(self.rect, imagePath, lists=[]) if imagePath != None else None
@@ -293,6 +332,8 @@ def DrawLoop():
 	
 	player.Draw()
 
+	cam.Draw()
+
 	pg.display.update()
 
 
@@ -305,14 +346,15 @@ def HandleEvents(event):
 def Update():
 	player.Update()
 
+	cam.Update(player)
 
-background = Image((0, 0, width, height), "background.jpg")
+# background = Image((0, 0, width, height), "background.jpg")
 
 
 floor = Platform((0, height // 2 + 350, width, 100), (lightBlack, darkWhite))
-Platform((0, -2, width, 2), (lightBlack, darkWhite))
-Platform((-2, 0, 2, height), (lightBlack, darkWhite))
-Platform((width, 0, 2, height), (lightBlack, darkWhite))
+Platform((0, -2, width, 2), (lightBlack, darkWhite), name="roof")
+Platform((-2, 0, 2, height), (lightBlack, darkWhite), name="leftWall")
+Platform((width, 0, 2, height), (lightBlack, darkWhite), name="rightWall")
 
 Platform((200, height // 2 + 300, 100, 50), (lightBlack, darkWhite))
 Platform((700, height // 2 + 300 - 20, 200, 70), (lightBlack, darkWhite))
@@ -325,7 +367,9 @@ Platform((900, height // 2 - 10 + 300, 50, 60), (lightBlack, darkWhite))
 Platform((1050, height // 2 - 50 + 300, 50, 100), (lightBlack, darkWhite))
 Ladder((1150, height // 2 - 150 + 300, 50, 200), (lightBlack, darkWhite))
 
-player = Player((10, height // 2 - 5, 20, 50), (lightBlack, darkWhite))
+player = Player((10, height // 2 + 360, 20, 50), (lightBlack, darkWhite))
+
+cam = Camera((0, 0, width, height), None, darkWhite)
 
 while running:
 	clock.tick_busy_loop(fps)
