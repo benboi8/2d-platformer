@@ -1,6 +1,9 @@
-# fix ladders - drawing, physics
-# fix crouch/jump climbing up platforms - fixed maybe
-# fix collisions - left/right
+# end point
+# coins / scoring system
+# leader board
+# enemies - event system / left to right collisions for ai
+# timer
+# level editor
 
 import os
 import sys
@@ -35,6 +38,21 @@ class Image(Box):
 			self.image = None
 
 
+class GameObject:
+	def __init__(self, rect):
+		self.rect = pg.Rect(rect)
+
+		AddToListOrDict([allObjs], self)
+
+	def Move(self, direction):
+		if direction[0]:
+			if not player.colliding["right"]:
+				self.rect.x -= player.movementSpeed * (player.sprintSpeedMulti if player.isSprinting else 1) 
+		elif direction[1]:
+			if not player.colliding["left"]:
+				self.rect.x += player.movementSpeed * (player.sprintSpeedMulti if player.isSprinting else 1) 
+
+
 class Camera(Image):
 	def __init__(self, rect, imagePath, borderColor, name="", surface=screen):
 		super().__init__(rect, imagePath, name, surface, [])
@@ -50,19 +68,16 @@ class Camera(Image):
 		self.rect.y = pos[1]
 
 	def Update(self, player):
-		if player.rect.x + player.rect.w // 2 == width // 2:
+		if player.rect.x >= centerMarker.rect.x:
 			self.isPlayerInCenter = True
-		elif player.rect.x + player.rect.w // 2 < width // 2:
+		elif player.rect.x < centerMarker.rect.x:
 			self.isPlayerInCenter = False
-
-		if self.isPlayerInCenter:
-			self.Move((player.rect.x - self.rect.w // 2, self.rect.y))
-
-			for obj in allObjs:
-				obj.Move(player.rect)
-
 		else:
 			self.Move(self.defaultPos)
+
+		if self.isPlayerInCenter:
+			for obj in allObjs:
+				obj.Move(player.direction)
 
 
 class Collider:
@@ -78,8 +93,14 @@ class BoxObj(Box):
 	def __init__(self, rect, colors, name="", surface=screen, drawData={}, lists=[allObjs]):
 		super().__init__(rect, colors, name, surface, drawData, lists)
 
-	def Move(self, player):
-		self.rect.x = player.x - self.rect.w // 2
+	def Move(self, direction):
+		if self.name not in ["roof", "leftWall", "rightWall", "floor"]:
+			if direction[0]:
+				if not player.colliding["right"]:
+					self.rect.x -= player.movementSpeed * (player.sprintSpeedMulti if player.isSprinting else 1) 
+			elif direction[1]:
+				if not player.colliding["left"]:
+					self.rect.x += player.movementSpeed * (player.sprintSpeedMulti if player.isSprinting else 1) 
 
 
 class Platform(BoxObj):
@@ -112,6 +133,7 @@ class Ladder(BoxObj):
 			self.image.Draw()
 
 		for rung in self.rungs:
+			rung.x = self.rect.x
 			pg.draw.rect(self.surface, self.borderColor, rung)
 
 
@@ -143,7 +165,7 @@ class Player(Box):
 		self.crouchData = {"height": self.rect.h // 1.5, "moveSpeed": 3}
 		self.height = self.rect.h
 		self.ladder = None
-		self.climbSpeed = 4
+		self.climbSpeed = 6`
 		self.climbDirection = -1
 		self.j = 0
 
@@ -178,6 +200,7 @@ class Player(Box):
 			
 			if event.key == self.keyBinds.get("climbDown"):
 				self.climbing = True
+				self.climbDirection = 1
 
 			if event.key == self.keyBinds.get("sprint"):
 				self.isSprinting = True
@@ -217,8 +240,7 @@ class Player(Box):
 				self.isJumping = True
 
 		if self.climbing:
-			if self.ladder != None:
-				self.rect.y += self.climbSpeed * self.climbDirection
+			self.Climb()
 		else:
 			self.Crouch()
 
@@ -227,6 +249,21 @@ class Player(Box):
 				# gravity
 				# [left, right], [up, down] 
 				self.ApplyForce(self.gravity, [[False, False], [False, True]])
+
+	def Climb(self):
+		canClimb = False
+		if self.ladder != None:
+			if self.climbDirection == -1:
+				if self.rect.y + self.rect.h > self.ladder.rect.y:
+					canClimb = True
+			
+			if self.climbDirection == 1:
+				if self.rect.y + self.rect.h < self.ladder.rect.y + self.ladder.rect.h:
+					canClimb = True
+
+
+		if canClimb:
+			self.rect.y += self.climbSpeed * self.climbDirection
 
 	def Crouch(self):
 		if self.crouched:
@@ -275,13 +312,14 @@ class Player(Box):
 				self.rect.y += magnitude
 
 	def Move(self):
-		if self.direction[0]:
-			if not self.colliding["right"]:
-				self.rect.x += self.movementSpeed * (self.sprintSpeedMulti if self.isSprinting else 1)
-		
-		if self.direction[1]:
-			if not self.colliding["left"]:
-				self.rect.x -= self.movementSpeed * (self.sprintSpeedMulti if self.isSprinting else 1)
+		if not cam.isPlayerInCenter:
+			if self.direction[0]:
+				if not self.colliding["right"]:
+					self.rect.x += self.movementSpeed * (self.sprintSpeedMulti if self.isSprinting else 1)
+			
+			if self.direction[1]:
+				if not self.colliding["left"]:
+					self.rect.x -= self.movementSpeed * (self.sprintSpeedMulti if self.isSprinting else 1)
 
 	def Collide(self):
 		self.colliders[0].rect = pg.Rect(self.rect.x - 2, self.rect.y + self.movementSpeed // 2, 4, self.rect.h - self.movementSpeed)
@@ -308,31 +346,36 @@ class Player(Box):
 			self.grounded = False
 
 		# ladders
-		# self.ladder = None
-		# for ladder in allLadders:
-		# 	for collider in self.colliders:
-		# 		if collider.CollideCheck(ladder.rect):
-		# 			self.ladder = ladder
-		# 			break
+		self.ladder = None
+		for ladder in allLadders:
+			for collider in self.colliders:
+				if collider.CollideCheck(ladder.rect):
+					self.ladder = ladder
+					break
 
 
 def DrawLoop():
 	screen.fill(darkGray)
 
-	DrawAllGUIObjects()
-
 	for image in allImages:
-		image.Draw()
+		if image.rect.colliderect(cam.rect):
+			image.Draw()
 
-	for platforms in allPlaforms:
-		platforms.Draw()
+	for platform in allPlaforms:
+		if platform.rect.colliderect(cam.rect):
+			platform.Draw()
 	
 	for ladder in allLadders:
-		ladder.Draw()
+		if ladder.rect.colliderect(cam.rect):
+			ladder.Draw()
 	
 	player.Draw()
 
 	cam.Draw()
+
+	# pg.draw.rect(screen, red, centerMarker.rect)
+	
+	DrawAllGUIObjects()
 
 	pg.display.update()
 
@@ -348,13 +391,22 @@ def Update():
 
 	cam.Update(player)
 
+
+
 # background = Image((0, 0, width, height), "background.jpg")
 
+cam = Camera((0, 0, width, height), None, darkWhite)
 
-floor = Platform((0, height // 2 + 350, width, 100), (lightBlack, darkWhite))
+
+fpsLbl = Label((0, 0, 100, 50), (lightBlack, darkWhite), str(fps), textData={"fontSize": 12, "alignText": "left-top"}, drawData={"drawBackground": False, "drawBorder": False})
+
+
+floor = Platform((0, height // 2 + 350, width, 100), (lightBlack, darkWhite), name="floor")
 Platform((0, -2, width, 2), (lightBlack, darkWhite), name="roof")
 Platform((-2, 0, 2, height), (lightBlack, darkWhite), name="leftWall")
 Platform((width, 0, 2, height), (lightBlack, darkWhite), name="rightWall")
+centerMarker = GameObject((width // 2, 0, 10, 10))
+
 
 Platform((200, height // 2 + 300, 100, 50), (lightBlack, darkWhite))
 Platform((700, height // 2 + 300 - 20, 200, 70), (lightBlack, darkWhite))
@@ -365,15 +417,15 @@ Platform((650, 190 + 300, 150, 20), (lightBlack, darkWhite))
 Platform((1100, height // 2 - 150 + 300, 50, 200), (lightBlack, darkWhite))
 Platform((900, height // 2 - 10 + 300, 50, 60), (lightBlack, darkWhite))
 Platform((1050, height // 2 - 50 + 300, 50, 100), (lightBlack, darkWhite))
-Ladder((1150, height // 2 - 150 + 300, 50, 200), (lightBlack, darkWhite))
+Ladder((1150, height // 2 - 150 + 100, 50, 400), (lightBlack, darkWhite))
 
 player = Player((10, height // 2 + 360, 20, 50), (lightBlack, darkWhite))
 
-cam = Camera((0, 0, width, height), None, darkWhite)
-
+fps = 60
 while running:
 	clock.tick_busy_loop(fps)
 	deltaTime = clock.get_time()
+	fpsLbl.UpdateText(str(round(clock.get_fps(), 1)))
 
 	for event in pg.event.get():
 		if event.type == pg.QUIT:
