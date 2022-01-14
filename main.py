@@ -1,4 +1,3 @@
-# end point
 # leader board
 # enemies - event system / left to right collisions for ai
 # level editor
@@ -24,8 +23,8 @@
 import os
 import sys
 
-os.chdir(sys.path[0])
-sys.path.insert(1, "P://Python Projects/assets/")
+# os.chdir(sys.path[0])
+# sys.path.insert(1, "P://Python Projects/assets/")
 
 
 from GameObjects import *
@@ -36,6 +35,8 @@ allPlaforms = []
 allLadders = []
 allStairs = []
 allCoins = []
+allDangers = []
+allWater = []
 
 allObjs = []
 
@@ -52,7 +53,6 @@ class BoxObj(Box):
 			elif direction[1]:
 				if not player.colliding["left"]:
 					self.rect.x += player.movementSpeed * (player.sprintSpeedMulti if player.isSprinting else 1) 
-
 
 
 class Image(BoxObj):
@@ -131,14 +131,13 @@ class Platform(BoxObj):
 	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allPlaforms, allObjs]):
 		super().__init__(rect, colors, name, surface, drawData, lists)
 
-		self.image = Image(self.rect, imagePath, lists=[]) if imagePath != None else None
+		self.image = Image(self.rect, imagePath, lists=[])
 
 	def Draw(self):
 		self.DrawBackground()
 		self.DrawBorder()
 
-		if self.image != None:
-			self.image.Draw()
+		self.image.Draw()
 
 
 class Stairs:
@@ -174,7 +173,7 @@ class Ladder(BoxObj):
 	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allLadders, allObjs]):
 		super().__init__(rect, colors, name, surface, drawData, lists)
 
-		self.image = Image(self.rect, imagePath, lists=[]) if imagePath != None else None
+		self.image = Image(self.rect, imagePath, lists=[])
 
 		numOfRungs = self.rect.h // 20
 		spacing = self.rect.h // numOfRungs
@@ -184,8 +183,7 @@ class Ladder(BoxObj):
 		self.DrawBackground()
 		self.DrawBorder()		
 		
-		if self.image != None:
-			self.image.Draw()
+		self.image.Draw()
 
 		for rung in self.rungs:
 			rung.x = self.rect.x
@@ -196,7 +194,7 @@ class Player(Box):
 	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, inputData={}, lists=[]):
 		super().__init__(rect, colors, name, surface, drawData, lists)
 
-		self.image = Image(self.rect, imagePath, lists=[]) if imagePath != None else None
+		self.image = Image(self.rect, imagePath, lists=[])
 
 		self.ogBorderColor = self.borderColor
 
@@ -223,11 +221,15 @@ class Player(Box):
 		self.climbSpeed = 6
 		self.climbFallSpeed = 1
 		self.climbDirection = -1
+		self.dead = False
 		self.j = 0
 
 		self.coins = 0
 
 		self.coinCounter = Label((self.rect.x + self.rect.w // 2 - 15, self.rect.y - 30, 30, 20), colors, "0", textData={"fontSize": 15}, drawData={"drawBackground": True, "drawBorder": False})
+
+		self.deadMessageBox = MessageBox((width // 2 - 200, height // 2 - 100, 400, 200), (lightBlack, darkWhite, lightBlue), confirmButtonData={"text": "Quit", "rect": pg.Rect(width // 2 - 190, height // 2 + 35, 185, 35), "onClick": Quit}, cancelButtonData={"onClick": self.Restart, "text": "Restart", "rect": pg.Rect(width // 2, height // 2 + 35, 190, 35)}, messageBoxData={"rect": pg.Rect(width // 2 - 190, height // 2 - 90, 380, 100)}, lists=[])
+		self.newMessage = False
 
 		self.direction = [False, False]
 
@@ -235,10 +237,12 @@ class Player(Box):
 		self.DrawBackground()
 		self.DrawBorder()
 
-		if self.image != None:
-			self.image.Draw()
+		self.image.Draw()
 
 		self.coinCounter.UpdateRect((self.rect.x + self.rect.w // 2 - 15, self.rect.y - 30, 30, 20))
+
+		if self.newMessage:
+			self.deadMessageBox.Draw()
 
 	def HandleEvent(self, event):
 		if event.type == pg.KEYDOWN:
@@ -289,30 +293,34 @@ class Player(Box):
 			if event.key == self.keyBinds.get("sprint"):
 				self.isSprinting = False
 
+		if self.newMessage:
+			self.deadMessageBox.HandleEvent(event)
+
 	def Update(self):
-		self.Collide()
-		
-		if self.direction != None:
-			self.Move()
+		if not self.dead:
+			self.Collide()
+			
+			if self.direction != None:
+				self.Move()
 
-		self.Jump()
-		
-		if self.holdingJump:
-			if self.grounded:
-				self.isJumping = True
+			self.Jump()
+			
+			if self.holdingJump:
+				if self.grounded:
+					self.isJumping = True
 
-		self.Climb()
-		self.Crouch()
+			self.Climb()
+			self.Crouch()
 
-		if not self.isJumping:
-			if self.ladder == None:
-				# gravity
-				# [left, right], [up, down] 
-				self.ApplyForce(self.gravity, [[False, False], [False, True]])
+			if not self.isJumping:
+				if self.ladder == None:
+					# gravity
+					# [left, right], [up, down] 
+					self.ApplyForce(self.gravity, [[False, False], [False, True]])
 
-		if self.rect.x >= ep.rect.x:
-			self.won = True
-			ts.Stop()
+			if self.rect.x >= ep.rect.x:
+				self.won = True
+				ts.Stop()
 
 	def Climb(self):
 		if self.ladder != None:
@@ -361,25 +369,26 @@ class Player(Box):
 				self.isJumping = False
 
 	def ApplyForce(self, magnitude, direction):
-		# left
-		if direction[0][0]:
-			if not self.colliding["left"]:
-				self.rect.x -= magnitude
-		
-		# right
-		if direction[0][1]:
-			if not self.colliding["right"]:
-				self.rect.x += magnitude
-		
-		# up 
-		if direction[1][0]:
-			if not self.colliding["up"]:
-				self.rect.y -= magnitude
-		
-		# down
-		if direction[1][1]:
-			if not self.colliding["down"]:
-				self.rect.y += magnitude
+		if not self.dead:
+			# left
+			if direction[0][0]:
+				if not self.colliding["left"]:
+					self.rect.x -= magnitude
+			
+			# right
+			if direction[0][1]:
+				if not self.colliding["right"]:
+					self.rect.x += magnitude
+			
+			# up 
+			if direction[1][0]:
+				if not self.colliding["up"]:
+					self.rect.y -= magnitude
+			
+			# down
+			if direction[1][1]:
+				if not self.colliding["down"]:
+					self.rect.y += magnitude
 
 	def Move(self):
 		if not cam.isPlayerInCenter:
@@ -409,6 +418,11 @@ class Player(Box):
 					
 					if collider.direction == "down" and self.colliding["down"]:
 						self.rect.y = platform.rect.y - self.rect.h
+
+					for water in allWater:
+						if water.rect.x <= self.rect.x and water.rect.x + water.rect.w >= self.rect.x + self.rect.w:
+							if collider.CollideCheck(water.collider):
+								self.Kill()
 
 		if self.colliding["down"]:
 			self.grounded = True
@@ -443,6 +457,20 @@ class Player(Box):
 					self.coins += coin.Collect()
 					self.coinCounter.UpdateText(str(self.coins))
 
+	def Kill(self):
+		self.dead = True
+
+		ts.Stop()
+
+		self.deadMessageBox.messageBox.UpdateText("You have died!\nPress the restart button to restart the level.\nPress the quit button to exit.")
+		self.SetNewMessage(True)
+
+	def SetNewMessage(self, state):
+		self.newMessage = state
+
+	def Restart(self):
+		self.SetNewMessage(False)
+
 
 class Coin(BoxObj):
 	def __init__(self, rect, colors, value=1, pickUpSound=None, imagePath=None, name="", surface=screen, drawData={}, lists=[allObjs, allCoins]):
@@ -452,11 +480,13 @@ class Coin(BoxObj):
 
 		self.value = value
 
-		self.image = Image(self.rect, imagePath, lists=[]) if imagePath != None else None
+		self.image = Image(self.rect, imagePath, lists=[])
 
 	def Draw(self):
 		self.DrawBackground()
 		self.DrawBorder()
+
+		self.image.Draw()
 
 	def Collect(self):
 		if self in allObjs:
@@ -506,7 +536,7 @@ class TimeScore:
 class EndPoint(BoxObj):
 	def __init__(self, rect, colors, imagePath=None):
 		super().__init__(rect, colors)
-		# self.image = Image(rect, imagePath)
+		self.image = Image(rect, imagePath)
 
 
 	def Draw(self):
@@ -514,6 +544,36 @@ class EndPoint(BoxObj):
 		pg.draw.rect(screen, self.backgroundColor, (self.rect.x - 5, self.rect.y, 5, 100))
 		DrawRectOutline(self.borderColor, self.rect)
 		DrawRectOutline(self.borderColor, pg.Rect(self.rect.x - 5, self.rect.y, 5, 100))
+
+		self.image.Draw()
+
+
+class Danger(BoxObj):
+	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allObjs, allDangers]):
+		super().__init__(rect, colors, name, surface, drawData, lists)
+
+		self.image = Image(rect, imagePath, lists=[])
+
+
+class Water(Danger):
+	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allObjs, allDangers, allWater]):
+		super().__init__(rect, colors, imagePath, name, surface, drawData, lists)
+
+		self.collider = Collider(self.rect.x, self.rect.y - self.rect.h, self.rect.w, self.rect.h * 2, "up")
+
+	def Draw(self):
+		self.DrawBackground()
+		self.DrawBorder()
+
+		# draw collider
+		# DrawRectOutline(self.borderColor, self.collider.rect)
+
+		self.image.Draw()
+
+
+def DrawObj(obj):
+	if obj.rect.colliderect(cam.rect):
+		obj.Draw()
 
 
 def DrawLoop():
@@ -526,20 +586,19 @@ def DrawLoop():
 	ep.Draw()
 
 	for image in allImages:
-		if image.rect.colliderect(cam.rect):
-			image.Draw()
+		DrawObj(image)
 
 	for platform in allPlaforms:
-		if platform.rect.colliderect(cam.rect):
-			platform.Draw()
+		DrawObj(platform)
 	
 	for ladder in allLadders:
-		if ladder.rect.colliderect(cam.rect):
-			ladder.Draw()
+		DrawObj(ladder)
 
 	for coin in allCoins:
-		if coin.rect.colliderect(cam.rect):
-			coin.Draw()
+		DrawObj(coin)
+
+	for danger in allDangers:
+		DrawObj(danger)
 	
 	player.Draw()
 
@@ -566,6 +625,10 @@ def Update():
 
 	ts.Update()
 
+
+def Quit():
+	global running
+	running = False
 
 
 # background = Image((0, 0, width, height), "background.jpg")
@@ -613,7 +676,10 @@ Coin((755, y - 110, 30, 35), (ChangeColorBrightness(yellow, 50), yellow), drawDa
 Coin((1060, y - 145, 30, 35), (ChangeColorBrightness(yellow, 50), yellow), drawData={"borderWidth": 3})
 Coin((1640, y - 630, 30, 35), (ChangeColorBrightness(yellow, 50), yellow), drawData={"borderWidth": 3})
 
-ep = EndPoint((2450, y - 510, 30, 30), (lightBlack, darkWhite), "flag.png")
+# Water((2300, y + 1, 300, 20), (lightBlue, lightBlue))
+Water((200, y, 300, 20), (lightBlue, lightBlue))
+
+ep = EndPoint((2450, y - 510, 30, 30), (lightBlack, darkWhite))
 
 player = Player((10, y - 55, 20, 50), (lightBlack, darkWhite))
 
@@ -626,10 +692,10 @@ while running:
 
 	for event in pg.event.get():
 		if event.type == pg.QUIT:
-			running = False
+			Quit()
 		if event.type == pg.KEYDOWN:
 			if event.key == pg.K_ESCAPE:
-				running = False
+				Quit()
 
 		HandleEvents(event)
 
