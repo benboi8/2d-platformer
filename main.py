@@ -23,8 +23,8 @@
 import os
 import sys
 
-# os.chdir(sys.path[0])
-# sys.path.insert(1, "P://Python Projects/assets/")
+os.chdir(sys.path[0])
+sys.path.insert(1, "P://Python Projects/assets/")
 
 
 from GameObjects import *
