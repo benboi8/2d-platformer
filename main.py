@@ -11,7 +11,7 @@
 # - patrol
 # - idle
 
-# - move side between barriers
+
 # - up and down
 # - ranged attacks
 # - http://hyperphysics.phy-astr.gsu.edu/hbase/traj.html
@@ -37,6 +37,8 @@ allStairs = []
 allCoins = []
 allDangers = []
 allWater = []
+allEnemies = []
+allSideWipers = []
 
 allObjs = []
 
@@ -119,8 +121,8 @@ class Camera(Image):
 
 
 class Collider:
-	def __init__(self, x, y, w, h, direction):
-		self.rect = pg.Rect(x, y, w, h)
+	def __init__(self, rect, direction):
+		self.rect = pg.Rect(rect)
 		self.direction = direction
 
 	def CollideCheck(self, rect):
@@ -190,7 +192,7 @@ class Ladder(BoxObj):
 			pg.draw.rect(self.surface, self.borderColor, rung)
 
 
-class Player(Box):
+class Entity(Box): 
 	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, inputData={}, lists=[]):
 		super().__init__(rect, colors, name, surface, drawData, lists)
 
@@ -198,12 +200,78 @@ class Player(Box):
 
 		self.ogBorderColor = self.borderColor
 
-		self.keyBinds = {"right": pg.K_d, "left": pg.K_a, "jump": pg.K_SPACE, "crouch": pg.K_LCTRL, "climbUp": pg.K_w, "climbDown": pg.K_s, "sprint": K_LSHIFT}
-
-		self.colliders = [Collider(self.rect.x - 2, self.rect.y, 4, self.rect.h, "left"), Collider(self.rect.x + self.rect.w - 2, self.rect.y, 4, self.rect.h, "right"), Collider(self.rect.x, self.rect.y - 2, self.rect.w, 4, "up"), Collider(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4, "down")]
+		self.colliderRects = [pg.Rect(self.rect.x - 2, self.rect.y, 4, self.rect.h), pg.Rect(self.rect.x + self.rect.w - 2, self.rect.y, 4, self.rect.h), pg.Rect(self.rect.x, self.rect.y - 2, self.rect.w, 4), pg.Rect(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4)]
+		self.colliders = [Collider(self.colliderRects[0], "left"), Collider(self.colliderRects[1], "right"), Collider(self.colliderRects[2], "up"), Collider(self.colliderRects[3], "down")]
 
 		self.colliding = {"left": False, "right": False, "up": False, "down": False}
 
+		self.moveSpeed = 5
+		self.movementSpeed = self.moveSpeed
+		self.gravity = 7
+		self.jumpForce = 10
+		self.dead = False
+		self.j = 0
+
+		self.isAffectedByGravity = True
+	
+	def Draw(self):
+		pg.draw.rect(self.surface, self.backgroundColor, self.rect)
+		DrawRectOutline(self.borderColor, self.rect)
+
+	def ApplyForce(self, magnitude, direction):
+		if not self.dead:
+			# left
+			if direction[0][0]:
+				if not self.colliding["left"]:
+					self.rect.x -= magnitude
+			
+			# right
+			if direction[0][1]:
+				if not self.colliding["right"]:
+					self.rect.x += magnitude
+			
+			# up 
+			if direction[1][0]:
+				if not self.colliding["up"]:
+					self.rect.y -= magnitude
+			
+			# down
+			if direction[1][1]:
+				if not self.colliding["down"]:
+					self.rect.y += magnitude
+
+	def ApplyGravity(self):
+		if not self.colliding["down"]:
+			self.ApplyForce(self.gravity, [[False, False], [False, True]])
+
+	def UpdateColliders(self, colliderRects):
+		self.colliderRects = colliderRects
+
+		if len(self.colliders) >= 1:
+			self.colliders[0].rect = self.colliderRects[0]
+		
+		if len(self.colliders) >= 2:
+			self.colliders[1].rect = self.colliderRects[1]
+		
+		if len(self.colliders) >= 3:
+			self.colliders[2].rect = self.colliderRects[2]
+
+		if len(self.colliders) >= 4:
+			self.colliders[3].rect = self.colliderRects[3]
+
+		self.colliding = {"left": False, "right": False, "up": False, "down": False}
+	
+	def Kill(self):
+		self.dead = True
+
+
+class Player(Entity):
+	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, inputData={}, lists=[]):
+		super().__init__(rect, colors, imagePath, name, surface, drawData, inputData, lists)
+
+		self.keyBinds = {"right": pg.K_d, "left": pg.K_a, "jump": pg.K_SPACE, "crouch": pg.K_LCTRL, "climbUp": pg.K_w, "climbDown": pg.K_s, "sprint": K_LSHIFT}
+
+		# get from player.json file
 		self.moveSpeed = 5
 		self.sprintSpeedMulti = 2
 		self.movementSpeed = self.moveSpeed
@@ -222,8 +290,8 @@ class Player(Box):
 		self.climbFallSpeed = 1
 		self.climbDirection = -1
 		self.dead = False
-		self.j = 0
-
+		
+		self.enemiesKilled = 0
 		self.coins = 0
 
 		self.coinCounter = Label((self.rect.x + self.rect.w // 2 - 15, self.rect.y - 30, 30, 20), colors, "0", textData={"fontSize": 15}, drawData={"drawBackground": True, "drawBorder": False})
@@ -315,8 +383,9 @@ class Player(Box):
 			if not self.isJumping:
 				if self.ladder == None:
 					# gravity
-					# [left, right], [up, down] 
-					self.ApplyForce(self.gravity, [[False, False], [False, True]])
+					# [left, right], [up, down]
+					if self.isAffectedByGravity:
+						self.ApplyGravity()
 
 			if self.rect.x >= ep.rect.x:
 				self.won = True
@@ -368,28 +437,6 @@ class Player(Box):
 				self.j = 0
 				self.isJumping = False
 
-	def ApplyForce(self, magnitude, direction):
-		if not self.dead:
-			# left
-			if direction[0][0]:
-				if not self.colliding["left"]:
-					self.rect.x -= magnitude
-			
-			# right
-			if direction[0][1]:
-				if not self.colliding["right"]:
-					self.rect.x += magnitude
-			
-			# up 
-			if direction[1][0]:
-				if not self.colliding["up"]:
-					self.rect.y -= magnitude
-			
-			# down
-			if direction[1][1]:
-				if not self.colliding["down"]:
-					self.rect.y += magnitude
-
 	def Move(self):
 		if not cam.isPlayerInCenter:
 			if self.direction[0]:
@@ -401,15 +448,11 @@ class Player(Box):
 					self.rect.x -= self.movementSpeed * (self.sprintSpeedMulti if self.isSprinting else 1)
 
 	def Collide(self):
-		self.colliders[0].rect = pg.Rect(self.rect.x - 2, self.rect.y + self.movementSpeed // 2, 4, self.rect.h - self.movementSpeed)
-		self.colliders[1].rect = pg.Rect(self.rect.x + self.rect.w - 2, self.rect.y + self.movementSpeed // 2, 4, self.rect.h - self.movementSpeed)
-		self.colliders[2].rect = pg.Rect(self.rect.x + self.movementSpeed // 2, self.rect.y - 2, self.rect.w - self.movementSpeed, 4)
-		self.colliders[3].rect = pg.Rect(self.rect.x + self.movementSpeed // 2, self.rect.y + self.rect.h - self.gravity // 2, self.rect.w - self.movementSpeed, self.gravity)
+		self.UpdateColliders([pg.Rect(self.rect.x - 2, self.rect.y, 4, self.rect.h), pg.Rect(self.rect.x + self.rect.w - 2, self.rect.y, 4, self.rect.h), pg.Rect(self.rect.x, self.rect.y - 2, self.rect.w, 4), pg.Rect(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4)])
 
-		self.colliding = {"left": False, "right": False, "up": False, "down": False}
-
-		for platform in allPlaforms:
-			for collider in self.colliders:
+		# platform
+		for collider in self.colliders:
+			for platform in allPlaforms:
 				if collider.CollideCheck(platform.rect):
 					self.colliding[collider.direction] = True
 
@@ -419,10 +462,11 @@ class Player(Box):
 					if collider.direction == "down" and self.colliding["down"]:
 						self.rect.y = platform.rect.y - self.rect.h
 
-					for water in allWater:
-						if water.rect.x <= self.rect.x and water.rect.x + water.rect.w >= self.rect.x + self.rect.w:
-							if collider.CollideCheck(water.collider):
-								self.Kill()
+		# water
+			for water in allWater:
+				if water.rect.x <= self.rect.x and water.rect.x + water.rect.w >= self.rect.x + self.rect.w:
+					if collider.CollideCheck(water.rect):
+						self.Kill()
 
 		if self.colliding["down"]:
 			self.grounded = True
@@ -454,8 +498,7 @@ class Player(Box):
 		for coin in allCoins:
 			for collider in self.colliders:
 				if collider.CollideCheck(coin.rect):
-					self.coins += coin.Collect()
-					self.coinCounter.UpdateText(str(self.coins))
+					self.CollectCoin(coin)
 
 	def Kill(self):
 		self.dead = True
@@ -465,11 +508,23 @@ class Player(Box):
 		self.deadMessageBox.messageBox.UpdateText("You have died!\nPress the restart button to restart the level.\nPress the quit button to exit.")
 		self.SetNewMessage(True)
 
+	def EnemeyKilled(self, value):
+		self.enemiesKilled += 1
+		self.CollectCoin(value)
+
 	def SetNewMessage(self, state):
 		self.newMessage = state
 
 	def Restart(self):
 		self.SetNewMessage(False)
+
+	def CollectCoin(self, value=None):
+		if type(value) == int:
+			self.coins += value
+		else:
+			self.coins += value.Collect()
+		
+		self.coinCounter.UpdateText(str(self.coins))
 
 
 class Coin(BoxObj):
@@ -559,16 +614,86 @@ class Water(Danger):
 	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allObjs, allDangers, allWater]):
 		super().__init__(rect, colors, imagePath, name, surface, drawData, lists)
 
-		self.collider = Collider(self.rect.x, self.rect.y - self.rect.h, self.rect.w, self.rect.h * 2, "up")
-
 	def Draw(self):
 		self.DrawBackground()
 		self.DrawBorder()
 
-		# draw collider
-		# DrawRectOutline(self.borderColor, self.collider.rect)
-
 		self.image.Draw()
+
+
+class Enemey(Entity):
+	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, inputData={}, lists=[allEnemies, allObjs, allDangers]):
+		super().__init__(rect, colors, imagePath, name, surface, drawData, inputData, lists)
+
+		self.isMovingLeft = True
+		self.value = 1
+
+		self.colliderRects = [pg.Rect(self.rect.x - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x + self.rect.w - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x - 2, self.rect.y - 6, self.rect.w + 4, 12), pg.Rect(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4)]
+
+		# get from json file
+		self.movementSpeed = 2
+	
+	def Move(self, direction):
+		if direction[0]:
+			if not player.colliding["right"]:
+				self.rect.x -= player.movementSpeed * (player.sprintSpeedMulti if player.isSprinting else 1) 
+		elif direction[1]:
+			if not player.colliding["left"]:
+				self.rect.x += player.movementSpeed * (player.sprintSpeedMulti if player.isSprinting else 1) 
+
+		if self.isMovingLeft:
+			self.ApplyForce(self.movementSpeed, [[True, False], [False, False]])
+		else:
+			self.ApplyForce(self.movementSpeed, [[False, True], [False, False]])
+
+	def Collide(self):
+		self.UpdateColliders([pg.Rect(self.rect.x - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x + self.rect.w - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x - 2, self.rect.y - 6, self.rect.w + 4, 12), pg.Rect(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4)])
+
+		for collider in self.colliders:
+			for platform in allPlaforms:
+				if collider.CollideCheck(platform.rect):
+					self.colliding[collider.direction] = True
+
+			for enemey in allEnemies:
+				if not enemey == self:
+					if collider.CollideCheck(enemey.rect):
+						self.colliding[collider.direction] = True
+
+			if not player.dead:
+				if collider.direction == "up":
+					if collider.CollideCheck(player.rect):
+						if not self.dead:
+							player.EnemeyKilled(self.value)
+							self.Kill()
+				else:
+					if collider.CollideCheck(player.rect):
+						player.Kill()
+
+
+
+	def Update(self):
+		if not self.dead:
+			self.Collide()
+
+			if self.colliding["left"]:
+				self.isMovingLeft = False
+
+			elif self.colliding["right"]:
+				self.isMovingLeft = True
+
+			if self.isAffectedByGravity:
+				self.ApplyGravity()
+
+			if not cam.isPlayerInCenter:
+				self.Move([False, False])
+
+	def Kill(self):
+		self.dead = True
+
+		if self in allDangers:
+			allDangers.remove(self)
+		if self in allEnemies:
+			allEnemies.remove(self)
 
 
 def DrawObj(obj):
@@ -599,7 +724,7 @@ def DrawLoop():
 
 	for danger in allDangers:
 		DrawObj(danger)
-	
+
 	player.Draw()
 
 	
@@ -622,6 +747,9 @@ def Update():
 	player.Update()
 
 	cam.Update(player)
+
+	for enemey in allEnemies:
+		enemey.Update()
 
 	ts.Update()
 
@@ -676,14 +804,17 @@ Coin((755, y - 110, 30, 35), (ChangeColorBrightness(yellow, 50), yellow), drawDa
 Coin((1060, y - 145, 30, 35), (ChangeColorBrightness(yellow, 50), yellow), drawData={"borderWidth": 3})
 Coin((1640, y - 630, 30, 35), (ChangeColorBrightness(yellow, 50), yellow), drawData={"borderWidth": 3})
 
-# Water((2300, y + 1, 300, 20), (lightBlue, lightBlue))
-Water((200, y, 300, 20), (lightBlue, lightBlue))
+Water((2300, y - 3, 300, 20), (lightBlue, lightBlue))
+
+Enemey((350, y - 55, 20, 50), (ChangeColorBrightness(lightRed, 60), lightRed))
+Enemey((380, y - 55, 20, 50), (ChangeColorBrightness(lightRed, 60), lightRed))
 
 ep = EndPoint((2450, y - 510, 30, 30), (lightBlack, darkWhite))
 
 player = Player((10, y - 55, 20, 50), (lightBlack, darkWhite))
 
 ts = TimeScore()
+
 
 while running:
 	clock.tick_busy_loop(fps)
