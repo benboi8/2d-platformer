@@ -48,7 +48,9 @@ class Trajectory:
 
 			x = vx * cos(self.angle)
 
-			y = (vy ** 2) + (0.5 * (gravity ** 2))
+			# y =  ax       +     bx ** 2
+			# y = a * (vy ** 2) + (0.5 * (gravity ** 2))
+			y = a * 
 
 			x += self.start[0]
 			y += self.start[1]
@@ -57,16 +59,11 @@ class Trajectory:
 
 			self.t += step
 
-			if self.t >= 1 and y >= self.lines[0][1]:
+			if self.t >= 0 and y >= self.lines[0][1]:
 				self.reachedGround = True
 
-ts.append(Trajectory(0, 60, [100, 100], 0))
-ts.append(Trajectory(10, 50, [100, 150], 0))
-ts.append(Trajectory(20, 40, [100, 200], 0))
-ts.append(Trajectory(30, 30, [100, 250], 0))
-ts.append(Trajectory(40, 30, [100, 300], 0))
-ts.append(Trajectory(50, 10, [300, 100], 0))
-ts.append(Trajectory(60, 10, [600, 100], 0))
+for angle in range(20, 40):
+	ts.append(Trajectory(angle, 50, [100, 100 + angle], 0))
 
 
 
