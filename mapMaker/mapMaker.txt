@@ -1,0 +1,18 @@
+load image using pillow
+create a temp image to edit
+
+
+for each pixel in the image:
+	check if height of image - current pixel height is less than the biggest rect height and do the same for width
+		break from loop
+
+	go down until non-black color
+	once non-black color is found go to the original pixel height and go right one pixel if it is black
+	
+	once down and right are both white pixels 
+		get the smallest height value to use as the rect height
+		get the width of the rect
+		create an obj to store this rect
+
+	get progress of program
+		(image width * image height) - (pixel x * pixel y)
