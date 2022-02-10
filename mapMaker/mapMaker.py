@@ -1,13 +1,8 @@
 from PIL import Image
 import numpy as np
 import os
-import sys
-
-os.chdir(sys.path[0])
-sys.path.insert(1, "P://Python Projects/assets/")
 
 from fileOps import *
-
 
 fileName = "map.png"
 tempFileName = "temp.png"
@@ -15,6 +10,9 @@ tempFileName = "temp.png"
 workingDir = os.getcwd() + "\\"
 
 screenSize = (1280, 720)
+
+
+platformColor = (0, 0, 0, 255)
 
 
 print(workingDir)
@@ -26,38 +24,51 @@ with Image.open(workingDir + fileName) as img:
 	img.close()
 
 
+rects = []	
 with Image.open(workingDir + tempFileName) as img:
 
-	for x in range(img.width - 1):
-		for y in range(img.height - 1):
+	x, y = -1, -1
+
+	while x <= img.width - 2:
+		while y <= img.height - 2:
 			
-			canMoveAcross = img.getpixel((x + 1, y)) == (0, 0, 0, 255)
-			canMoveDown = img.getpixel((x, y + 1)) == (0, 0, 0, 255)
+			canMoveAcross = img.getpixel((x + 1, y)) == platformColor
+			canMoveDown = img.getpixel((x, y + 1)) == platformColor
 
 			px, py = x, y
-			canMoveDown = img.getpixel((x, y + 1)) == (0, 0, 0, 255)
-			while canMoveDown:
-				py += 1
-				canMoveDown = img.getpixel((x, py)) == (0, 0, 0, 255)
+			
+			canMoveAcross = img.getpixel((x + 1, y)) == platformColor
+			canMoveDown = img.getpixel((x, y + 1)) == platformColor
 
-				print(x, y, py)
+			rect = [x + 1, y, img.width, img.height]
 
+			while canMoveAcross:
+				while canMoveDown:
+					py += 1
+					if py >= img.height:
+						break
+					canMoveDown = img.getpixel((x, py)) == platformColor
 
+				rect[1] = min(py, rect[1])
+				rect[3] = rect[1] - y
 
-			# while canMoveAcross:
-			# 	while canMoveDown:
-			# 		canMoveDown = img.getpixel((x, y + 1)) == (0, 0, 0, 255)
-			# 		print(x, y, px, py)
-			# 		py += 1
+				px += 1
+				canMoveAcross = img.getpixel((px, y)) == platformColor
+			
+			if rect[2] != img.width or rect[3] != img.height:
+				rects.append(rect)
+				x = rect[0]
 
+			y += 1
 
-
-			# 	canMoveAcross = img.getpixel((x + 1, y)) == (0, 0, 0, 255)
-			# 	px += 1
-			# 	print(x, y, px)
+		x += 1
+		y = 0
 
 	img.close()
 
-
-
 RemoveFile(workingDir + tempFileName)
+
+
+data = {
+	"rects": rects
+}

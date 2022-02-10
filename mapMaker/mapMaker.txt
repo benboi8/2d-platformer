@@ -13,6 +13,6 @@ for each pixel in the image:
 		get the smallest height value to use as the rect height
 		get the width of the rect
 		create an obj to store this rect
-
+		
 	get progress of program
 		(image width * image height) - (pixel x * pixel y)
