@@ -1,23 +1,9 @@
-# leader board
-# enemies - event system / left to right collisions for ai
-# level editor
-# goo / water / danger system
-# sprinting physics
-
-# AI
-# Multiple states:
-# - attack close
-# - attack far
-# - patrol
-# - idle
-
-
-# - up and down
-# - ranged attacks
-# - http://hyperphysics.phy-astr.gsu.edu/hbase/traj.html
-
-# - restarting
-# - pause menu
+# 1 - leader board
+# 2 - pause menu
+# 3 - goo / water / danger system
+# 4 - enemies - event system / left to right collisions for ai
+# 5 - sprinting physics
+# 6 - level editor
 
 
 import os
@@ -128,6 +114,9 @@ class Collider:
 	def CollideCheck(self, rect):
 		return self.rect.colliderect(rect)
 
+	def Draw(self, col=blue):
+		pg.draw.rect(screen, blue, self.rect)
+
 
 class Platform(BoxObj):
 	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, lists=[allPlaforms, allObjs]):
@@ -193,26 +182,27 @@ class Ladder(BoxObj):
 
 
 class Entity(Box): 
-	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, inputData={}, lists=[]):
+	def __init__(self, rect, colors, imagePath=None, data={}, name="", surface=screen, drawData={}, inputData={}, lists=[]):
 		super().__init__(rect, colors, name, surface, drawData, lists)
 
 		self.image = Image(self.rect, imagePath, lists=[])
 
 		self.ogBorderColor = self.borderColor
 
+		#                                       left                                            right                                                                            up                                              down
 		self.colliderRects = [pg.Rect(self.rect.x - 2, self.rect.y, 4, self.rect.h), pg.Rect(self.rect.x + self.rect.w - 2, self.rect.y, 4, self.rect.h), pg.Rect(self.rect.x, self.rect.y - 2, self.rect.w, 4), pg.Rect(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4)]
 		self.colliders = [Collider(self.colliderRects[0], "left"), Collider(self.colliderRects[1], "right"), Collider(self.colliderRects[2], "up"), Collider(self.colliderRects[3], "down")]
 
 		self.colliding = {"left": False, "right": False, "up": False, "down": False}
 
-		self.moveSpeed = 5
+		self.moveSpeed = data.get("moveSpeed", 5)
 		self.movementSpeed = self.moveSpeed
-		self.gravity = 7
-		self.jumpForce = 10
+		self.gravity = data.get("gravity", 7)
+		self.jumpForce = data.get("jumpForce", 10)
 		self.dead = False
 		self.j = 0
 
-		self.isAffectedByGravity = True
+		self.isAffectedByGravity = data.get("isAffectedByGravity", True)
 	
 	def Draw(self):
 		pg.draw.rect(self.surface, self.backgroundColor, self.rect)
@@ -266,8 +256,9 @@ class Entity(Box):
 
 
 class Player(Entity):
-	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, inputData={}, lists=[]):
-		super().__init__(rect, colors, imagePath, name, surface, drawData, inputData, lists)
+	def __init__(self, rect, colors, imagePath=None, data={}, name="", surface=screen, drawData={}, inputData={}, lists=[]):
+		super().__init__(rect, colors, imagePath, data, name, surface, drawData, inputData, lists)
+		self.startingRect = rect
 
 		self.keyBinds = {"right": pg.K_d, "left": pg.K_a, "jump": pg.K_SPACE, "crouch": pg.K_LCTRL, "climbUp": pg.K_w, "climbDown": pg.K_s, "sprint": K_LSHIFT}
 
@@ -290,14 +281,17 @@ class Player(Entity):
 		self.climbFallSpeed = 1
 		self.climbDirection = -1
 		self.dead = False
+		self.won = False
 		
 		self.enemiesKilled = 0
 		self.coins = 0
 
 		self.coinCounter = Label((self.rect.x + self.rect.w // 2 - 15, self.rect.y - 30, 30, 20), colors, "0", textData={"fontSize": 15}, drawData={"drawBackground": True, "drawBorder": False})
 
-		self.deadMessageBox = MessageBox((width // 2 - 200, height // 2 - 100, 400, 200), (lightBlack, darkWhite, lightBlue), confirmButtonData={"text": "Quit", "rect": pg.Rect(width // 2 - 190, height // 2 + 35, 185, 35), "onClick": Quit}, cancelButtonData={"onClick": self.Restart, "text": "Restart", "rect": pg.Rect(width // 2, height // 2 + 35, 190, 35)}, messageBoxData={"rect": pg.Rect(width // 2 - 190, height // 2 - 90, 380, 100)}, lists=[])
-		self.newMessage = False
+		self.deadMessageBox = MessageBox((width // 2 - 200, height // 2 - 100, 400, 200), (lightBlack, darkWhite, lightBlue), confirmButtonData={"text": "Quit", "rect": pg.Rect(width // 2 - 190, height // 2 + 35, 185, 35), "onClick": QuitToMenu}, cancelButtonData={"onClick": self.Restart, "text": "Restart", "rect": pg.Rect(width // 2, height // 2 + 35, 190, 35)}, messageBoxData={"rect": pg.Rect(width // 2 - 190, height // 2 - 90, 380, 100)}, lists=[])
+		self.dead = False
+
+		self.winningLabel = MessageBox((width // 2 - 200, height // 2 - 100, 400, 200), (lightBlack, darkWhite, lightBlue), cancelButtonData={"text": "Next Level", "rect": pg.Rect(width // 2, height // 2 + 35, 190, 35), "onClick": LoadNextLevel}, confirmButtonData={"text": "Quit to menu", "onClick": QuitToMenu, "rect": pg.Rect(width // 2 - 190, height // 2 + 35, 185, 35)}, messageBoxData={"rect": pg.Rect(width // 2 - 190, height // 2 - 90, 380, 100)}, lists=[])
 
 		self.direction = [False, False]
 
@@ -309,35 +303,39 @@ class Player(Entity):
 
 		self.coinCounter.UpdateRect((self.rect.x + self.rect.w // 2 - 15, self.rect.y - 30, 30, 20))
 
-		if self.newMessage:
+		if self.dead:
 			self.deadMessageBox.Draw()
 
+		if self.won:
+			self.winningLabel.Draw()
+
 	def HandleEvent(self, event):
-		if event.type == pg.KEYDOWN:
-			if event.key == self.keyBinds.get("right"):
-				self.direction[0] = True
-			
-			if event.key == self.keyBinds.get("left"):
-				self.direction[1] = True
+		if not self.dead and not self.won:
+			if event.type == pg.KEYDOWN:
+				if event.key == self.keyBinds.get("right"):
+					self.direction[0] = True
+				
+				if event.key == self.keyBinds.get("left"):
+					self.direction[1] = True
 
-			if event.key == self.keyBinds.get("jump"):
-				if self.grounded:
-					self.isJumping = True
-				self.holdingJump = True
+				if event.key == self.keyBinds.get("jump"):
+					if self.grounded:
+						self.isJumping = True
+					self.holdingJump = True
 
-			if event.key == self.keyBinds.get("crouch"):
-				self.crouched = True
+				if event.key == self.keyBinds.get("crouch"):
+					self.crouched = True
 
-			if event.key == self.keyBinds.get("climbUp"):
-				self.climbing = True
-				self.climbDirection = -1
-			
-			if event.key == self.keyBinds.get("climbDown"):
-				self.climbing = True
-				self.climbDirection = 1
+				if event.key == self.keyBinds.get("climbUp"):
+					self.climbing = True
+					self.climbDirection = -1
+				
+				if event.key == self.keyBinds.get("climbDown"):
+					self.climbing = True
+					self.climbDirection = 1
 
-			if event.key == self.keyBinds.get("sprint"):
-				self.isSprinting = True
+				if event.key == self.keyBinds.get("sprint"):
+					self.isSprinting = True
 
 		if event.type == pg.KEYUP:
 			if event.key == self.keyBinds.get("right"):
@@ -361,11 +359,14 @@ class Player(Entity):
 			if event.key == self.keyBinds.get("sprint"):
 				self.isSprinting = False
 
-		if self.newMessage:
+		if self.dead:
 			self.deadMessageBox.HandleEvent(event)
 
+		if self.won:
+			self.winningLabel.HandleEvent(event)
+
 	def Update(self):
-		if not self.dead:
+		if not self.dead and not self.won:
 			self.Collide()
 			
 			if self.direction != None:
@@ -388,8 +389,14 @@ class Player(Entity):
 						self.ApplyGravity()
 
 			if self.rect.x >= ep.rect.x:
-				self.won = True
-				ts.Stop()
+				self.Win()
+
+	def Win(self):
+		self.won = True
+		ts.Stop()
+		self.winningLabel.messageBox.UpdateText(f"You have beat the level!")
+		self.isJumping = False
+		self.direction = [False, False]
 
 	def Climb(self):
 		if self.ladder != None:
@@ -441,11 +448,11 @@ class Player(Entity):
 		if not cam.isPlayerInCenter:
 			if self.direction[0]:
 				if not self.colliding["right"]:
-					self.rect.x += self.movementSpeed * (self.sprintSpeedMulti if self.isSprinting else 1)
+					self.ApplyForce(self.movementSpeed * (self.sprintSpeedMulti if self.isSprinting else 1), [[False, True], [False, False]])
 			
 			if self.direction[1]:
 				if not self.colliding["left"]:
-					self.rect.x -= self.movementSpeed * (self.sprintSpeedMulti if self.isSprinting else 1)
+					self.ApplyForce(self.movementSpeed * (self.sprintSpeedMulti if self.isSprinting else 1), [[True, False], [False, False]])
 
 	def Collide(self):
 		self.UpdateColliders([pg.Rect(self.rect.x - 2, self.rect.y, 4, self.rect.h), pg.Rect(self.rect.x + self.rect.w - 2, self.rect.y, 4, self.rect.h), pg.Rect(self.rect.x, self.rect.y - 2, self.rect.w, 4), pg.Rect(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4)])
@@ -506,17 +513,20 @@ class Player(Entity):
 		ts.Stop()
 
 		self.deadMessageBox.messageBox.UpdateText("You have died!\nPress the restart button to restart the level.\nPress the quit button to exit.")
-		self.SetNewMessage(True)
 
 	def EnemeyKilled(self, value):
 		self.enemiesKilled += 1
 		self.CollectCoin(value)
 
-	def SetNewMessage(self, state):
-		self.newMessage = state
-
 	def Restart(self):
-		self.SetNewMessage(False)
+		ts.Stop()
+		ts.Reset()
+		self.ResetPosition()
+		self.dead = False
+		self.won = False
+
+	def ResetPosition(self):
+		self.rect = pg.Rect(self.startingRect)
 
 	def CollectCoin(self, value=None):
 		if type(value) == int:
@@ -565,6 +575,8 @@ class TimeScore:
 		self.stopped = False
 
 	def Reset(self):
+		self.paused = False
+		self.stopped = False
 		self.startTime = dt.datetime.now()
 
 	def Pause(self):
@@ -622,16 +634,19 @@ class Water(Danger):
 
 
 class Enemey(Entity):
-	def __init__(self, rect, colors, imagePath=None, name="", surface=screen, drawData={}, inputData={}, lists=[allEnemies, allObjs, allDangers]):
-		super().__init__(rect, colors, imagePath, name, surface, drawData, inputData, lists)
+	def __init__(self, rect, colors, imagePath=None, data={}, name="", surface=screen, drawData={}, inputData={}, lists=[allEnemies, allObjs, allDangers]):
+		super().__init__(rect, colors, imagePath, data, name, surface, drawData, inputData, lists)
+
+		self.isAffectedByGravity = data.get("isAffectedByGravity", False)
 
 		self.isMovingLeft = True
+		# score value
 		self.value = 1
 
+		#                                          left                                                             right                                                                                      up                                                           down
 		self.colliderRects = [pg.Rect(self.rect.x - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x + self.rect.w - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x - 2, self.rect.y - 6, self.rect.w + 4, 12), pg.Rect(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4)]
 
-		# get from json file
-		self.movementSpeed = 2
+		self.movementSpeed = data.get("moveSpeed", 2)
 	
 	def Move(self, direction):
 		if direction[0]:
@@ -647,7 +662,16 @@ class Enemey(Entity):
 			self.ApplyForce(self.movementSpeed, [[False, True], [False, False]])
 
 	def Collide(self):
-		self.UpdateColliders([pg.Rect(self.rect.x - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x + self.rect.w - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x - 2, self.rect.y - 6, self.rect.w + 4, 12), pg.Rect(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4)])
+		self.UpdateColliders([pg.Rect(self.rect.x - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x + self.rect.w - 1, self.rect.y + 6, 2, self.rect.h - 10), pg.Rect(self.rect.x + 2, self.rect.y, self.rect.w - 4, 8), pg.Rect(self.rect.x, self.rect.y + self.rect.h - 2, self.rect.w, 4)])
+
+		for collider in self.colliders:
+			if not player.dead:
+				if collider.direction == "up":
+					if collider.CollideCheck(player.rect):
+						if not self.dead:
+							player.EnemeyKilled(self.value)
+							self.Kill()
+							return
 
 		for collider in self.colliders:
 			for platform in allPlaforms:
@@ -659,17 +683,8 @@ class Enemey(Entity):
 					if collider.CollideCheck(enemey.rect):
 						self.colliding[collider.direction] = True
 
-			if not player.dead:
-				if collider.direction == "up":
-					if collider.CollideCheck(player.rect):
-						if not self.dead:
-							player.EnemeyKilled(self.value)
-							self.Kill()
-				else:
-					if collider.CollideCheck(player.rect):
-						player.Kill()
-
-
+			if collider.CollideCheck(player.rect):
+				player.Kill()
 
 	def Update(self):
 		if not self.dead:
@@ -758,6 +773,15 @@ def Quit():
 	global running
 	running = False
 
+# create menu
+def QuitToMenu():
+	Quit()
+
+
+def LoadNextLevel():
+	print("Next Level")
+
+
 
 # background = Image((0, 0, width, height), "background.jpg")
 
@@ -774,6 +798,8 @@ centerMarker = GameObject((width // 2, 0, 10, 10))
 
 y = height - floor.rect.h
 
+# load with json
+# ------------------------------------------ start of level ------------------------------------------
 Platform((200, y - 50, 100, 50), (lightBlack, darkWhite))
 Platform((700, y - 70, 200, 70), (lightBlack, darkWhite))
 Platform((800, y - 120, 100, 50), (lightBlack, darkWhite))
@@ -806,10 +832,11 @@ Coin((1640, y - 630, 30, 35), (ChangeColorBrightness(yellow, 50), yellow), drawD
 
 Water((2300, y - 3, 300, 20), (lightBlue, lightBlue))
 
-Enemey((350, y - 55, 20, 50), (ChangeColorBrightness(lightRed, 60), lightRed))
-Enemey((380, y - 55, 20, 50), (ChangeColorBrightness(lightRed, 60), lightRed))
+Enemey((350, floor.rect.y - 50, 20, 50), (ChangeColorBrightness(lightRed, 60), lightRed))
+Enemey((380, floor.rect.y - 50, 20, 50), (ChangeColorBrightness(lightRed, 60), lightRed))
 
 ep = EndPoint((2450, y - 510, 30, 30), (lightBlack, darkWhite))
+# ------------------------------------------ end of level ------------------------------------------
 
 player = Player((10, y - 55, 20, 50), (lightBlack, darkWhite))
 
