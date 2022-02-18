@@ -32,15 +32,6 @@ rects = []
 img = Image.open(workingDir + tempFileName)
 
 
-def CollideRect(a, b):
-	return (
-		min(a[0], a[2]) < max(b[0], b[2]) and 
-		min(a[1], a[3]) < max(b[1], b[3]) and
-		max(a[0], a[2]) > min(b[0], b[2]) and
-		max(a[1], a[3]) > min(b[1], b[3])
-		)
-
-
 
 x, y = 0, 0
 img_width, img_height = img.width - 1, img.height - 1
@@ -50,8 +41,6 @@ while x < img_width:
 	while y < img_height:
 
 		pointer_x, pointer_y = x, y
-
-		print(x, y)
 
 		if img.getpixel((pointer_x, pointer_y)) == platformColor:
 			rect_start = [pointer_x, pointer_y]
@@ -84,16 +73,14 @@ while x < img_width:
 
 			# add rect to list
 			if reached_end_width:
-				rect = [rect_start[0], rect_start[1], rect_end[0], rect_end[1]]
 				if len(rects) == 0:
-					rects.append(rect)
-					x = rect[0]
+					rects.append([rect_start[0], rect_start[1], rect_end[0], rect_end[1]])
+					x = rect_start[0]
 				else:	
 					for r in rects:
-						if  CollideRect(r, rect):
-							rects.append(rect)
-							x = rect[0]
-							break
+						if rect_start[0] >= r[0] and rect_start[1] >= r[1] and rect_end[0] <= r[2] and rect_end[1] <= r[3]:
+							rects.append([rect_start[0], rect_start[1], rect_end[0], rect_end[1]])
+							x = rect_start[0]
 
 		y += 1
 
@@ -140,6 +127,9 @@ print(rects)
 # 	x += 1
 # 	y = 0
 
+img.close()
+
+RemoveFile(workingDir + tempFileName)
 
 # process output
 # print(rects[0])
@@ -147,28 +137,3 @@ print(rects)
 # data = {
 	# "rects": rects
 # }
-
-img.close()
-
-RemoveFile(workingDir + tempFileName)
-
-
-import pygame as pg
-
-running = True
-
-screen = pg.display.set_mode((img_width, img_height))
-
-while running:
-	for event in pg.event.get():
-		if event.type == pg.QUIT:
-			running = False
-		if event.type == pg.KEYDOWN:
-			if event.key == pg.K_ESCAPE:
-				running = False
-
-	screen.fill((0, 0, 0))
-	for r in rects:
-		pg.draw.rect(screen, (255, 255, 255), (r[0], r[1], r[2] - r[0], r[3] - r[1]))
-
-	pg.display.update()

@@ -1,0 +1,59 @@
+platformColors[(35,35,35),(215,215,215)]platformColors
+ladderColors[(35,35,35),(215,215,215)]ladderColors
+stairColors[(35,35,35),(215,215,215)]stairColors
+coinColors[(128,128,0),(255,255,0)]coinColors
+waterColors[(4,179,255),(4,179,255)]waterColors
+enemyColors[(153,25,25),(255,41,41)]enemyColors
+endPointColors[(35,35,35),(215,215,215)]endPointColors
+
+
+platforms[
+"rect":(200, y - 50, 100, 50),"colors":platformColors
+"rect":(700, y - 70, 200, 70),"colors":platformColors
+"rect":(800, y - 120, 100, 50),"colors":platformColors
+"rect":(300, y - 120, 200, 20),"colors":platformColors
+"rect":(510, y - 180, 150, 20),"colors":platformColors
+"rect":(690, y - 260, 150, 20),"colors":platformColors
+"rect":(1100, y - 200, 50, 200),"colors":platformColors
+"rect":(900, y - 60, 50, 60),"colors":platformColors
+"rect":(1050, y - 100, 50, 100),"colors":platformColors
+"rect":(1200, y - 500, 20, 465),"colors":platformColors
+"rect":(1660, y - 110, 20, 110),"colors":platformColors
+"rect":(1200, y - 500, 100, 20),"colors":platformColors
+"rect":(1600, y - 590, 100, 20),"colors":platformColors
+"rect":(2300, y - 410, 300, 20),"colors":platformColors
+"rect":(2600, 0, 20, 310),"colors":platformColors
+]platforms
+
+ladders[
+"rect":(1150, y - 500, 50, 500),"colors": ladderColors
+]ladders
+
+stairs[
+"rect":(1300, y - 110, 360, 110),"colors":stairColors,"incline":(10, 20, 3, 1)
+"rect":(1300, y - 590, 300, 90),"colors":stairColors,"incline":(10, 20, 3, 1)
+"rect":(1700, y - 590, 600, 180),"colors":stairColors,"incline":(10, 20, 3, -1)
+]stairs
+
+coins[
+"rect":(235, y - 90, 30, 35),"colors":coinColors
+"rect":(385, y - 160, 30, 35),"colors":coinColors
+"rect":(565, y - 220, 30, 35),"colors":coinColors
+"rect":(755, y - 300, 30, 35),"colors":coinColors
+"rect":(755, y - 110, 30, 35),"colors":coinColors
+"rect":(1060, y - 145, 30, 35),"colors":coinColors
+"rect":(1640, y - 630, 30, 35),"colors":coinColors
+]coins
+
+Water[
+"rect":(2300, y - 3, 300, 20),"colors":waterColors
+]Water
+
+Enemy[
+"rect":(350, floor.rect.y - 50, 20, 50),"colors":enemyColors
+"rect":(380, floor.rect.y - 50, 20, 50),"colors":enemyColors
+]Enemy
+
+EndPoint[
+"rect":(2350, y - 510, 30, 30),"colors":endPointColors
+]EndPoint

@@ -1,0 +1,9 @@
+
+- Collect coins to increase score
+
+- Avoid enemies
+
+- Jump on enemies heads to kill them and increase
+  your score
+
+- Complete each level in the fastest time you can
