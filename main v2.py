@@ -16,6 +16,9 @@ from GameObjects import *
 from GUIShapes import *
 
 
+background = darkGray
+
+
 def Quit():
 	global running
 	running = False
@@ -59,14 +62,20 @@ class GameObject:
 class Image(BoxObj):
 	allImages = []
 
-	def __init__(self, rect, imgPath, name="", drawData={}, lists=[allImages, allObjs]):
+	def __init__(self, rect, imgPath, scaleImg=True, name="", drawData={}, lists=[allImages, allObjs]):
 		super().__init__(rect, ((0, 0, 0), (0, 0, 0)), name, drawData=drawData, lists=lists)
 
 		self.imagePath = imgPath
 
 		self.resize = False
 
-		self.ScaleImage(pg.image.load(self.imagePath) if self.imagePath != None else None, (self.rect.w, self.rect.h))
+		if scaleImg:
+			self.ScaleImage(pg.image.load(self.imagePath) if self.imagePath != None else None, (self.rect.w, self.rect.h))
+		else:
+			if self.imagePath != None:
+				self.image = pg.image.load(self.imagePath)
+			else:
+				self.image = None
 
 	def Draw(self):
 		if self.image != None:
@@ -179,6 +188,8 @@ class LevelManager:
 			obj[0].remove(obj[1])
 
 	def LoadLevel(ID):
+		global background
+
 		fileName = f"level_{LevelManager.levelID}_{LevelManager.difficulty}.{LevelManager.fileExtension}"
 
 		if not CheckFileExists(fileName, LevelManager.folder):
@@ -232,7 +243,6 @@ class LevelManager:
 
 				rect = (int(x), int(y), int(w), int(h))
 				
-
 				if "incline" in objs:
 					colors = obj.split('),"')[1].split(":")[1].split(",")[0]
 					incline = obj.split('),"')[1].split(',"')[1].split(":")[1]
@@ -252,6 +262,15 @@ class LevelManager:
 					lists.append({"rect": rect, "colors": colors})
 
 			return lists
+
+		background = level[level.find("background[") + len("background[") : level.find("]background")]
+		background = background.split(":")
+		if background[0] == "None":
+			background = background[1]
+			background = background.strip("()").split(",")
+			background = (int(background[0]), int(background[1]), int(background[2]))
+		else:
+			background = Image((0, 0, width, height), background[0].strip('"'), False)
 
 		platformColors = ConvertStringToColor(platformColors)
 		ladderColors = ConvertStringToColor(ladderColors)
@@ -731,7 +750,9 @@ class Player:
 		Player.colliding = {"left": False, "right": False, "up": False, "down": False}
 
 	def Kill():
-		Player.dead = True
+		if not Player.dead:
+			Player.dead = True
+			SoundManager.PlaySound("death.wav")
 
 	def EnemeyKilled(value):
 		Player.enemiesKilled += 1
@@ -1016,7 +1037,7 @@ class SoundManager:
 	musicChannel.play(pg.mixer.Sound(musicFolder + menuFile), loops=-1)
 	musicChannel.set_volume(master * music)
 
-	sfxChannel = pg.mixer.Channel(1)
+	sfxChannels = [pg.mixer.Channel(i) for i in range(1, 5)]
 
 	def ChangeMasterVolume(value):
 		SoundManager.master = min(1, max(0, value))
@@ -1032,16 +1053,22 @@ class SoundManager:
 
 	def ChangeVolume():
 		SoundManager.musicChannel.set_volume(max(0, min(1, SoundManager.master * SoundManager.music)))
-		SoundManager.sfxChannel.set_volume(max(0, min(1, SoundManager.master * SoundManager.sfx)))
+		for sfx in SoundManager.sfxChannels:
+			sfx.set_volume(max(0, min(1, SoundManager.master * SoundManager.sfx)))
 
 	def PlayMusic(fileName):
 		if CheckFileExists(fileName, SoundManager.musicFolder):
 			SoundManager.musicChannel.stop()
-			SoundManager.musicChannel.play(pg.mixer.Sound(SoundManager.musicFolder + fileName))
+			SoundManager.musicChannel.play(pg.mixer.Sound(SoundManager.musicFolder + fileName), loops=-1)
+			SoundManager.musicChannel.set_volume(max(0, min(1, SoundManager.master * SoundManager.music)))
 
 	def PlaySound(fileName):
 		if CheckFileExists(fileName, SoundManager.sfxFolder):
-			SoundManager.sfxChannel.play(pg.mixer.Sound(SoundManager.sfxFolder + fileName))
+			for sfx in SoundManager.sfxChannels:
+				if sfx.get_busy() == False:
+					sfx.play(pg.mixer.Sound(SoundManager.sfxFolder + fileName))
+					sfx.set_volume(max(0, min(1, SoundManager.master * SoundManager.sfx)))
+					break
 
 
 class Settings:
@@ -1205,6 +1232,19 @@ class MainMenu:
 		LevelManager.LoadLevel(LevelManager.levelID)
 		SoundManager.PlayMusic(f"level_{LevelManager.levelID}.mp3")
 
+		for obj in PauseMenu.settingsMenu.objects:
+			if obj.name == "master":
+				obj.SetValue(SoundManager.master)
+				SoundManager.ChangeMasterVolume(obj.GetValue())
+			if obj.name == "sfx":
+				obj.SetValue(SoundManager.sfx)
+				SoundManager.ChangeSFXVolume(obj.GetValue())
+			if obj.name == "music":
+				obj.SetValue(SoundManager.music)
+				SoundManager.ChangeMusicVolume(obj.GetValue())
+
+		SoundManager.ChangeVolume()
+
 	mainMenu = Collection([
 		Box((0, 0, width, height), (ChangeColorBrightness(darkGray, 40), ChangeColorBrightness(darkGray, 40)), lists=[]),
 		Label((400, 50, width - 800, 75), (lightBlack, darkWhite), text="Title", textData={"fontSize": 40}, drawData={"roundedCorners": True, "roundness": 0}, lists=[]),
@@ -1237,9 +1277,9 @@ class MainMenu:
 			Button((255, 450, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["climbDown"]), name="climbDown", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["climbDown"]),
 			], name="keyBinds"),
 		Button((50, 570, 195, 50), (lightBlack, darkWhite, lightBlue), text="Reset keybinds", onClick=Settings.ResetKeybinds, lists=[]),
-		Slider((500, 200, 400, 50), (lightBlack, darkWhite), name="master", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Master Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.master, "onValueChange": SoundManager.ChangeMasterVolume}),
-		Slider((500, 320, 400, 50), (lightBlack, darkWhite), name="sfx", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "SFX Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.sfx, "onValueChange": SoundManager.ChangeSFXVolume}),
-		Slider((500, 440, 400, 50), (lightBlack, darkWhite), name="music", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Music Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.music, "onValueChange": SoundManager.ChangeMusicVolume}),
+		Slider((500, 200, 400, 50), (lightBlack, darkWhite), name="master", buttonData={"backgroundColor": darkGray, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Master Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.master, "onValueChange": SoundManager.ChangeMasterVolume}),
+		Slider((500, 320, 400, 50), (lightBlack, darkWhite), name="sfx", buttonData={"backgroundColor": darkGray, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "SFX Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.sfx, "onValueChange": SoundManager.ChangeSFXVolume}),
+		Slider((500, 440, 400, 50), (lightBlack, darkWhite), name="music", buttonData={"backgroundColor": darkGray, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Music Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.music, "onValueChange": SoundManager.ChangeMusicVolume}),
 		Button((width - 150, height - 75, 100, 50), (lightBlack, darkWhite, lightBlue), text="Close", lists=[], drawData={"roundedCorners": True, "roundness": 5}, onClick=CloseMainMenuSettings)
 		])
 
@@ -1273,13 +1313,6 @@ class PauseMenu:
 
 	def	OpenSettings():
 		PauseMenu.isSettingsOpen = True
-		for obj in PauseMenu.settingsMenu.objects:
-			if obj.name == "master":
-				obj.SetValue(SoundManager.master)
-			if obj.name == "sfx":
-				obj.SetValue(SoundManager.sfx)
-			if obj.name == "music":
-				obj.SetValue(SoundManager.music)
 	
 	def	CloseSettings():
 		PauseMenu.isSettingsOpen = False
@@ -1360,9 +1393,9 @@ class PauseMenu:
 			Button((255, 450, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["climbDown"]), name="climbDown", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["climbDown"]),
 			], name="keyBinds"),
 		Button((50, 570, 195, 50), (lightBlack, darkWhite, lightBlue), text="Reset keybinds", onClick=Settings.ResetKeybinds, lists=[]),
-		Slider((500, 200, 400, 50), (lightBlack, darkWhite), name="master", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Master Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.master, "onValueChange": SoundManager.ChangeMasterVolume}),
-		Slider((500, 320, 400, 50), (lightBlack, darkWhite), name="sfx", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "SFX Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.sfx, "onValueChange": SoundManager.ChangeSFXVolume}),
-		Slider((500, 440, 400, 50), (lightBlack, darkWhite), name="music", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Music Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.music, "onValueChange": SoundManager.ChangeMusicVolume}),
+		Slider((500, 200, 400, 50), (lightBlack, darkWhite), name="master", buttonData={"backgroundColor": darkGray, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Master Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.master, "onValueChange": SoundManager.ChangeMasterVolume}),
+		Slider((500, 320, 400, 50), (lightBlack, darkWhite), name="sfx", buttonData={"backgroundColor": darkGray, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "SFX Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.sfx, "onValueChange": SoundManager.ChangeSFXVolume}),
+		Slider((500, 440, 400, 50), (lightBlack, darkWhite), name="music", buttonData={"backgroundColor": darkGray, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Music Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.music, "onValueChange": SoundManager.ChangeMusicVolume}),
 		Button((width - 145, height - 85, 120, 60), (lightBlack, darkWhite, lightBlue), text="Close", drawData={"roundedCorners": True, "roundness": 8}, onClick=CloseSettings, lists=[]),
 		])
 
@@ -1375,6 +1408,9 @@ def DrawObj(obj):
 
 def DrawLoop():
 	screen.fill(darkGray)
+
+	if not isinstance(background, Image):
+		pg.draw.rect(screen, background, (0, 0, width, height))
 	
 	for img in Image.allImages:
 		img.Draw()
@@ -1404,10 +1440,14 @@ def DrawLoop():
 
 	DrawAllGUIObjects()
 
+	if showFps:
+		fpsLbl.Draw()
+
 	pg.display.update()
 
 
 def HandleEvents(event):
+	global showFps
 	HandleGui(event)
 
 	MainMenu.HandleEvent(event)
@@ -1417,6 +1457,10 @@ def HandleEvents(event):
 	PauseMenu.HandleEvent(event)
 
 	Player.HandleEvent(event)
+
+	if event.type == pg.KEYDOWN:
+		if event.key == pg.K_F3:
+			showFps = not showFps
 
 
 def Update():
@@ -1437,7 +1481,8 @@ Platform((width, 0, 12, height), (lightBlack, darkWhite), name="rightWall")
 centerMarker = GameObject((width // 3, 0, 10, 10))
 
 gameTimer = GameTimer()
-fpsLbl = Label((0, 0, 100, 50), (lightBlack, darkWhite), str(fps), textData={"fontSize": 12, "alignText": "left-top"}, drawData={"drawBackground": False, "drawBorder": False})
+showFps = False
+fpsLbl = Label((0, 0, 100, 50), (lightBlack, darkWhite), str(fps), textData={"fontSize": 12, "alignText": "left-top"}, drawData={"drawBackground": False, "drawBorder": False}, lists=[])
 
 
 while running:
