@@ -1,8 +1,6 @@
 # create new levels with different difficulties
 # options menu
 # how to play menu
-# start menu
-# level browser
 # leader board
 # level editor
 
@@ -26,6 +24,7 @@ def Quit():
 def	QuitToMenu():
 	MainMenu.isMainMenuOpen = True
 	PauseMenu.isGamePaused = False
+	SoundManager.PlayMusic("menu.mp3")
 
 
 allObjs = []
@@ -72,7 +71,7 @@ class Image(BoxObj):
 	def Draw(self):
 		if self.image != None:
 			self.surface.blit(self.image, self.rect)
-	
+
 	def ScaleImage(self, image, size):
 		if image != None:
 			self.image = pg.transform.scale(pg.image.load(self.imagePath), size)
@@ -240,19 +239,17 @@ class LevelManager:
 
 					x, y, w, h = incline.strip("()").split(",")
 
-					imgPath = allImgPaths[colors.strip()]
 
 					colors = allColors[colors.strip()]
 
-					lists.append({"rect": rect, "colors": colors, "imgPath": imgPath, "incline": (int(x), int(y), int(w), int(h))})
+					lists.append({"rect": rect, "colors": colors, "incline": (int(x), int(y), int(w), int(h))})
 				else:
 					colors = obj.split('),"')[1].split(":")[1].split(",")[0]
 					
-					imgPath = allImgPaths[colors.strip()]
 
 					colors = allColors[colors.strip()]
 				
-					lists.append({"rect": rect, "colors": colors, "imgPath": imgPath})
+					lists.append({"rect": rect, "colors": colors})
 
 			return lists
 
@@ -271,16 +268,6 @@ class LevelManager:
 			"waterColors": waterColors,
 			"enemyColors": enemyColors,
 			"endPointColors": endPointColors
-		}
-
-		allImgPaths = {
-			"platformColors": "None",
-			"ladderColors": "None",
-			"stairColors": "None",
-			"coinColors": "None",
-			"waterColors": "None",
-			"enemyColors": "None",
-			"endPointColors": "None"
 		}
 
 		plats = level[level.find("platforms[") + len("platforms[") + 1:level.find("]platforms") - 1]
@@ -346,6 +333,11 @@ class LevelManager:
 		for obj in MainMenu.mainMenu.objects:
 			if obj.name == "difficulty_btn":
 				obj.UpdateText(f"{LevelManager.difficulty[:1].upper()}{LevelManager.difficulty[1:]}")
+
+		if hasattr(MainMenu, "levels"):
+			for obj in MainMenu.levels.objects:
+				if obj.name == "difficulty_btn_level_manager":
+					obj.UpdateText(f"{LevelManager.difficulty[:1].upper()}{LevelManager.difficulty[1:]}")
 
 
 class Collider:
@@ -573,22 +565,22 @@ class EndPoint:
 			DrawRectOutline(EndPoint.borderColor, pg.Rect(EndPoint.rect.x - 5, EndPoint.rect.y, 5, 100))
 
 
-playerData = {
-	"rect": (10, Y - 65, 20, 50),
-	"moveSpeed": 5,
-	"sprintSpeedMulti": 1,
-	"gravity": 7,
-	"jumpForce": 10,
-	"climbSpeed": 6,
-	"climbFallSpeed": 1,
-	"climbDirection": -1,
-	"isAffectedByGravity": True
-}
 class Player:
+	playerData = {
+		"rect": (10, Y - 65, 20, 50),
+		"moveSpeed": 5,
+		"sprintSpeedMulti": 1,
+		"gravity": 7,
+		"jumpForce": 10,
+		"climbSpeed": 6,
+		"climbFallSpeed": 1,
+		"climbDirection": -1,
+		"isAffectedByGravity": True
+	}
 	startingRect = pg.Rect(playerData["rect"])
 	rect = pg.Rect(startingRect)
 
-	keyBinds = {"right": pg.K_d, "left": pg.K_a, "jump": pg.K_SPACE, "crouch": pg.K_LCTRL, "climbUp": pg.K_w, "climbDown": pg.K_s, "sprint": K_LSHIFT}
+	keyBinds = OpenFile("defaultKeybinds.json")
 
 	moveSpeed = playerData["moveSpeed"]
 	sprintSpeedMulti = playerData["sprintSpeedMulti"]
@@ -743,7 +735,7 @@ class Player:
 
 	def EnemeyKilled(value):
 		Player.enemiesKilled += 1
-		Player.CollectCoin(value)
+		Player.IncreaseScore(value)
 
 	def Collide():
 		Player.UpdateColliders([pg.Rect(Player.rect.x - 2, Player.rect.y, 4, Player.rect.h), pg.Rect(Player.rect.x + Player.rect.w - 2, Player.rect.y, 4, Player.rect.h), pg.Rect(Player.rect.x, Player.rect.y - 2, Player.rect.w, 4), pg.Rect(Player.rect.x, Player.rect.y + Player.rect.h - 2, Player.rect.w, 4)])
@@ -798,13 +790,17 @@ class Player:
 				if collider.CollideCheck(coin.rect):
 					Player.CollectCoin(coin)
 
-	def CollectCoin(value=None):
+	def IncreaseScore(value=None):
 		if type(value) == int:
 			Player.coins += value
 		else:
 			Player.coins += value.Collect()
 		
 		Player.coinCounter.UpdateText(str(Player.coins))
+
+	def CollectCoin(value):
+		Player.IncreaseScore(value)
+		SoundManager.PlaySound("collect_coin.wav")
 
 	def Move():
 		if not Camera.isPlayerInCenter:
@@ -870,7 +866,7 @@ class Player:
 		Player.direction = [False, False]
 
 	def Update():
-		if not Player.dead and not Player.won and not MainMenu.isMainMenuOpen and not PauseMenu.isGamePaused:
+		if not Player.dead or not Player.won and MainMenu.IsMainMenuActive() and not PauseMenu.isGamePaused:
 			Player.Collide()
 			
 			if Player.direction != None:
@@ -905,6 +901,7 @@ class Player:
 		Player.enemiesKilled = 0
 		Player.coins = 0
 		Player.coinCounter.UpdateText("0")
+		gameTimer.Reset()
 
 	def ResetPos():
 		Player.rect = pg.Rect(Player.startingRect)
@@ -1005,6 +1002,121 @@ class GameTimer:
 			return msg
 
 
+class SoundManager:
+	master = 1
+	sfx = 1
+	music = 0.6
+
+	musicFolder = "music/"
+	sfxFolder = "sounds/"
+
+	menuFile = "menu.mp3"
+
+	musicChannel = pg.mixer.Channel(0)
+	musicChannel.play(pg.mixer.Sound(musicFolder + menuFile), loops=-1)
+	musicChannel.set_volume(master * music)
+
+	sfxChannel = pg.mixer.Channel(1)
+
+	def ChangeMasterVolume(value):
+		SoundManager.master = min(1, max(0, value))
+		SoundManager.ChangeVolume()
+
+	def ChangeSFXVolume(value):
+		SoundManager.sfx = min(1, max(0, value))
+		SoundManager.ChangeVolume()
+
+	def ChangeMusicVolume(value):
+		SoundManager.music = min(1, max(0, value))
+		SoundManager.ChangeVolume()
+
+	def ChangeVolume():
+		SoundManager.musicChannel.set_volume(max(0, min(1, SoundManager.master * SoundManager.music)))
+		SoundManager.sfxChannel.set_volume(max(0, min(1, SoundManager.master * SoundManager.sfx)))
+
+	def PlayMusic(fileName):
+		if CheckFileExists(fileName, SoundManager.musicFolder):
+			SoundManager.musicChannel.stop()
+			SoundManager.musicChannel.play(pg.mixer.Sound(SoundManager.musicFolder + fileName))
+
+	def PlaySound(fileName):
+		if CheckFileExists(fileName, SoundManager.sfxFolder):
+			SoundManager.sfxChannel.play(pg.mixer.Sound(SoundManager.sfxFolder + fileName))
+
+
+class Settings:
+	def GetKeyName(key):
+		key = str(key)
+		keyBindNames = OpenFile("allowedKeyBinds.json")
+		if key in keyBindNames:
+			return keyBindNames[key]
+		return "UNDEFINED"
+
+	isChangingKeyBind = False
+	keyName = None
+
+	def StartChangeKeyBind(keyName):
+		Settings.isChangingKeyBind = True
+		Settings.keyName = keyName
+
+		keybindsMessage = "Waiting for keyboard input.\nPress ESCAPE to cancel."
+		if MainMenu.isMainMenuOpen:
+			MainMenu.changingKeyBindMessage.UpdateText(keybindsMessage)
+		else:
+			PauseMenu.changingKeyBindMessage.UpdateText(keybindsMessage)
+
+	def ChangeKeyBind(event):
+		if event.type == pg.KEYDOWN:
+			if event.key == pg.K_ESCAPE:
+				Settings.StopChangeKeyBind()
+			else:
+				if Settings.GetKeyName(event.key) != "UNDEFINED":
+					for key in Player.keyBinds:
+						if Player.keyBinds[key] == event.key:
+							Settings.StopChangeKeyBind()
+							break
+					
+					if Settings.isChangingKeyBind:
+						Player.keyBinds[Settings.keyName] = event.key
+						for obj in MainMenu.mainMenuSettingsMenu.objects:
+							if obj.name == "keyBinds":
+								for elem in obj.objects:
+									if elem.name == Settings.keyName:
+										elem.UpdateText(Settings.GetKeyName(event.key))
+						
+						for obj in PauseMenu.settingsMenu.objects:
+							if obj.name == "keyBinds":
+								for elem in obj.objects:
+									if elem.name == Settings.keyName:
+											elem.UpdateText(Settings.GetKeyName(Player.keyBinds[elem.name]))
+
+					Settings.StopChangeKeyBind()
+
+	def StopChangeKeyBind():
+		Settings.isChangingKeyBind = False
+		if MainMenu.isMainMenuOpen:
+			MainMenu.changingKeyBindMessage.UpdateText("")
+		else:
+			PauseMenu.changingKeyBindMessage.UpdateText("")
+
+	def ResetKeybinds():
+		Player.keyBinds = OpenFile("defaultKeybinds.json")
+		Settings.UpdateText()
+
+	def UpdateText():
+		for obj in MainMenu.mainMenuSettingsMenu.objects:
+			if obj.name == "keyBinds":
+				for elem in obj.objects:
+					if elem.name in Player.keyBinds:
+						elem.UpdateText(Settings.GetKeyName(Player.keyBinds[elem.name]))
+
+		for obj in PauseMenu.settingsMenu.objects:
+			if obj.name == "keyBinds":
+				for elem in obj.objects:
+					if elem.name in Player.keyBinds:
+						elem.UpdateText(Settings.GetKeyName(Player.keyBinds[elem.name]))
+
+
 class MainMenu:
 	isMainMenuOpen = True
 	isMainMenuSettingsOpen = False
@@ -1017,6 +1129,7 @@ class MainMenu:
 		else:
 			if MainMenu.isMainMenuSelectLevelOpen:
 				MainMenu.mainMenuSelectLevelMenu.Draw()
+				MainMenu.levels.Draw()
 			else:
 				if MainMenu.isMainMenuHowToPlayOpen:
 					MainMenu.mainMenuHowToPlayMenu.Draw()
@@ -1033,6 +1146,7 @@ class MainMenu:
 			else:
 				if MainMenu.isMainMenuSelectLevelOpen:
 					MainMenu.mainMenuSelectLevelMenu.HandleEvent(event)
+					MainMenu.levels.HandleEvent(event)
 				else:
 					if MainMenu.isMainMenuOpen:
 						MainMenu.mainMenu.HandleEvent(event)
@@ -1042,6 +1156,13 @@ class MainMenu:
 
 	def OpenMainMenuSettings():
 		MainMenu.isMainMenuSettingsOpen = True
+		for obj in MainMenu.mainMenuSettingsMenu.objects:
+			if obj.name == "master":
+				obj.SetValue(SoundManager.master)
+			if obj.name == "sfx":
+				obj.SetValue(SoundManager.sfx)
+			if obj.name == "music":
+				obj.SetValue(SoundManager.music)
 
 	def CloseMainMenuSettings():
 		MainMenu.isMainMenuSettingsOpen = False
@@ -1055,6 +1176,26 @@ class MainMenu:
 	def OpenSelectLevelMenu():
 		MainMenu.isMainMenuSelectLevelOpen = True
 
+		MainMenu.levels = Collection([
+			Box((10, 140, width - 20, height - 230), (lightBlack, darkWhite), lists=[]),
+			Label((10, height - 70, 110, 50), (lightBlack, darkWhite), text="Difficulty: ", lists=[]),
+			Button((125, height - 70, 100, 50), (lightBlack, darkWhite, lightBlue), text=f"{LevelManager.difficulty[:1].upper()}{LevelManager.difficulty[1:]}", onClick=LevelManager.ChangeDifficulty, name="difficulty_btn_level_manager", lists=[]),
+			])
+		files = GetAllFilesInFolder(LevelManager.folder)
+		x = 20
+		index = 8
+		for i in range(len(files) // 3):
+			if i % index == 0 and i != 0:
+				x += 120
+
+			MainMenu.levels.Add(Button((x, 150 + ((i % index) * 60), 110, 50), (lightBlack, darkWhite, lightBlue), text=f"Level {i + 1}", onClick=MainMenu.LoadLevel, onClickArgs=[i + 1], lists=[]))
+
+	def LoadLevel(levelID):
+		MainMenu.CloseSelectLevelMenu()
+		MainMenu.isMainMenuOpen = False
+		LevelManager.UnloadLevel()
+		LevelManager.LoadLevel(levelID)
+
 	def CloseSelectLevelMenu():
 		MainMenu.isMainMenuSelectLevelOpen = False
 
@@ -1062,21 +1203,43 @@ class MainMenu:
 		MainMenu.isMainMenuOpen = False
 		LevelManager.UnloadLevel()
 		LevelManager.LoadLevel(LevelManager.levelID)
+		SoundManager.PlayMusic(f"level_{LevelManager.levelID}.mp3")
 
 	mainMenu = Collection([
 		Box((0, 0, width, height), (ChangeColorBrightness(darkGray, 40), ChangeColorBrightness(darkGray, 40)), lists=[]),
-		Label((400, 50, width - 800, 75), (lightBlack, darkWhite), text="Title Main Menu", textData={"fontSize": 40}, drawData={"roundedCorners": True, "roundness": 0}, lists=[]),
+		Label((400, 50, width - 800, 75), (lightBlack, darkWhite), text="Title", textData={"fontSize": 40}, drawData={"roundedCorners": True, "roundness": 0}, lists=[]),
 		Button((width // 2 - 200, 175, 400, 75), (lightBlack, darkWhite, lightBlue), onClick=StartGame, text="Start Game", textData={"fontSize": 35}, drawData={"roundedCorners": True, "roundness": 5}, lists=[]),
 		Button((width // 2 - 200, 275, 400, 75), (lightBlack, darkWhite, lightBlue), onClick=OpenSelectLevelMenu, text="Select Level", textData={"fontSize": 35}, drawData={"roundedCorners": True, "roundness": 5}, lists=[]),
 		Button((width // 2 - 200, 375, 400, 75), (lightBlack, darkWhite, lightBlue), onClick=OpenMainMenuSettings, text="Settings", textData={"fontSize": 35}, drawData={"roundedCorners": True, "roundness": 5}, lists=[]),
 		Button((width // 2 - 200, 475, 400, 75), (lightBlack, darkWhite, lightBlue), onClick=OpenMainMenuHowToPlay, text="How To Play", textData={"fontSize": 35}, drawData={"roundedCorners": True, "roundness": 5}, lists=[]),
 		Button((width // 2 - 200, 575, 400, 75), (lightBlack, darkWhite, lightBlue), onClick=Quit, text="Exit", textData={"fontSize": 35}, drawData={"roundedCorners": True, "roundness": 5}, lists=[]),
-		Button((width - 390, 175, 100, 75), (lightBlack, darkWhite, lightBlue), text=f"{LevelManager.difficulty[:1].upper()}{LevelManager.difficulty[1:]}", onClick=LevelManager.ChangeDifficulty, name="difficulty_btn", lists=[]),
+		Label((width - 405, 175, 110, 50), (lightBlack, darkWhite), text="Difficulty: ", lists=[]),
+		Button((width - 290, 175, 100, 50), (lightBlack, darkWhite, lightBlue), text=f"{LevelManager.difficulty[:1].upper()}{LevelManager.difficulty[1:]}", onClick=LevelManager.ChangeDifficulty, name="difficulty_btn", lists=[]),
+		HyperLink((width - 110, height - 35, 100, 25), (lightBlack, darkWhite, lightBlue), text="Music", url="https://www.FesliyanStudios.com", textData={"fontSize": 15}, lists=[])
 		])
 
+	changingKeyBindMessage = Label((50, 510, 400, 50), (lightBlack, darkWhite), lists=[], textData={"fontSize": 18, "alignText": "top"})
 	mainMenuSettingsMenu = Collection([
 		Box((0, 0, width, height), (ChangeColorBrightness(darkGray, 40), ChangeColorBrightness(darkGray, 40)), lists=[]),
 		Label((400, 50, width - 800, 75), (lightBlack, darkWhite), text="Settings", lists=[], drawData={"roundedCorners": True, "roundness": 0}, textData={"fontSize": 40}),
+		Label((50, 150, 400, 50), (lightBlack, darkWhite), text="Key Binds", drawData={"roundedCorners": True, "roundness": 5}, lists=[]),
+		changingKeyBindMessage,
+		Collection([
+			Label((50, 210, 195, 50), (lightBlack, darkWhite), text="Move Left", lists=[]),
+			Button((255, 210, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["left"]), name="left", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["left"]),
+			Label((50, 270, 195, 50), (lightBlack, darkWhite), text="Move Right", lists=[]),
+			Button((255, 270, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["right"]), name="right", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["right"]),
+			Label((50, 330, 195, 50), (lightBlack, darkWhite), text="Jump", lists=[]),
+			Button((255, 330, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["jump"]), name="jump", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["jump"]),
+			Label((50, 390, 195, 50), (lightBlack, darkWhite), text="Climb Up", lists=[]),
+			Button((255, 390, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["climbUp"]), name="climbUp", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["climbUp"]),
+			Label((50, 450, 195, 50), (lightBlack, darkWhite), text="Climb Down", lists=[]),
+			Button((255, 450, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["climbDown"]), name="climbDown", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["climbDown"]),
+			], name="keyBinds"),
+		Button((50, 570, 195, 50), (lightBlack, darkWhite, lightBlue), text="Reset keybinds", onClick=Settings.ResetKeybinds, lists=[]),
+		Slider((500, 200, 400, 50), (lightBlack, darkWhite), name="master", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Master Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.master, "onValueChange": SoundManager.ChangeMasterVolume}),
+		Slider((500, 320, 400, 50), (lightBlack, darkWhite), name="sfx", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "SFX Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.sfx, "onValueChange": SoundManager.ChangeSFXVolume}),
+		Slider((500, 440, 400, 50), (lightBlack, darkWhite), name="music", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Music Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.music, "onValueChange": SoundManager.ChangeMusicVolume}),
 		Button((width - 150, height - 75, 100, 50), (lightBlack, darkWhite, lightBlue), text="Close", lists=[], drawData={"roundedCorners": True, "roundness": 5}, onClick=CloseMainMenuSettings)
 		])
 
@@ -1086,10 +1249,12 @@ class MainMenu:
 		Button((width - 150, height - 75, 100, 50), (lightBlack, darkWhite, lightBlue), text="Close", lists=[], drawData={"roundedCorners": True, "roundness": 5}, onClick=CloseSelectLevelMenu)
 		])
 
+	howToPlayDescText = OpenFile("howToPlayDescText.txt")
 	mainMenuHowToPlayMenu = Collection([
 		Box((0, 0, width, height), (ChangeColorBrightness(darkGray, 40), ChangeColorBrightness(darkGray, 40)), lists=[]),
 		Label((400, 50, width - 800, 75), (lightBlack, darkWhite), text="How To Play", lists=[], drawData={"roundedCorners": True, "roundness": 0}, textData={"fontSize": 40}),
-		Button((width - 150, height - 75, 100, 50), (lightBlack, darkWhite, lightBlue), text="Close", lists=[], drawData={"roundedCorners": True, "roundness": 5}, onClick=CloseMainMenuHowToPlay)
+		Button((width - 150, height - 75, 100, 50), (lightBlack, darkWhite, lightBlue), text="Close", lists=[], drawData={"roundedCorners": True, "roundness": 5}, onClick=CloseMainMenuHowToPlay),
+		Label((width // 2 - 300, height // 2 - 200, 600, 400), (lightBlack, darkWhite), text=howToPlayDescText, drawData={"roundedCorners": True, "roundness": 20}, textData={"fontSize": 25, "alignText": "left-top"}, lists=[]),
 		])
 
 
@@ -1108,6 +1273,13 @@ class PauseMenu:
 
 	def	OpenSettings():
 		PauseMenu.isSettingsOpen = True
+		for obj in PauseMenu.settingsMenu.objects:
+			if obj.name == "master":
+				obj.SetValue(SoundManager.master)
+			if obj.name == "sfx":
+				obj.SetValue(SoundManager.sfx)
+			if obj.name == "music":
+				obj.SetValue(SoundManager.music)
 	
 	def	CloseSettings():
 		PauseMenu.isSettingsOpen = False
@@ -1148,12 +1320,13 @@ class PauseMenu:
 
 	pauseButton = Collection([
 		Button((10, 20, 30, 30), (lightBlack, darkWhite, lightBlue), onClick=Pause, drawData={"drawBackground": False, "drawBorder": False}, lists=[]),
-		Image((10, 20, 30, 30), "pause.png", lists=[]),
+		Image((10, 20, 30, 30), "pause_btn.png", lists=[]),
 		])
 
 	pauseMenu = Collection([
+		Image((0, 0, width, height), "pause.png", lists=[]),
 		Label((width // 2 - 200, 50, 400, 100), (lightBlack, darkWhite), text="Game is paused", textData={"fontSize": 50}, drawData={"roundedCorners": True, "roundness": 4}, lists=[]),
-		Box((width // 2 - 200, 200, 400, 290), (lightBlack, darkWhite), drawData={"roundedCorners": True, "roundness": 24}, lists=[]),
+		Box((width // 2 - 200, 200, 400, 290), (ChangeColorBrightness(black, 50), darkWhite), drawData={"roundedCorners": True, "roundness": 24}, lists=[]),
 		Button((width // 2 - 190, 220, 380, 50), (lightBlack, darkWhite, lightBlue), text="Resume", drawData={"roundedCorners": True, "roundness":8}, onClick=Resume, lists=[]),
 		Button((width // 2 - 190, 285, 380, 50), (lightBlack, darkWhite, lightBlue), text="Settings", drawData={"roundedCorners": True, "roundness":8}, onClick=OpenSettings, lists=[]),
 		Button((width // 2 - 190, 350, 380, 50), (lightBlack, darkWhite, lightBlue), text="How To Play", drawData={"roundedCorners": True, "roundness":8}, onClick=OpenHowToPlay, lists=[]),
@@ -1164,18 +1337,32 @@ class PauseMenu:
 	howToPlayMenu = Collection([
 		Box((10, 10, width - 20, height - 20), (ChangeColorBrightness(darkGray, 40), darkWhite), drawData={"roundedCorners": True, "roundness": 24}, lists=[]),
 		Label((width // 2 - 200, 20, 400, 100), (lightBlack, darkWhite), text="How To Play", textData={"fontSize": 50}, drawData={"roundedCorners": True, "roundness": 4}, lists=[]),
-		Label((30, 155, 200, 50), (lightBlack, darkWhite), text="KEYBINDS", drawData={"roundedCorners": True, "roundness": 10}, lists=[]),
-		Label((30, 215, 200, 70), (lightBlack, darkWhite), text="A: Left\nD: Right\nSPACE: Jump", drawData={"roundedCorners": True, "roundness": 10}, textData={"fontSize": 18, "alignText": "left-top"}, lists=[]),
 		Label((width // 2 - 300, height // 2 - 200, 600, 400), (lightBlack, darkWhite), text=howToPlayDescText, drawData={"roundedCorners": True, "roundness": 20}, textData={"fontSize": 25, "alignText": "left-top"}, lists=[]),
 		Button((width - 145, height - 85, 120, 60), (lightBlack, darkWhite, lightBlue), text="Close", drawData={"roundedCorners": True, "roundness": 8}, onClick=CloseHowToPlay, lists=[]),
 		])
 
+	changingKeyBindMessage = Label((50, 510, 400, 50), (lightBlack, darkWhite), lists=[], textData={"fontSize": 18, "alignText": "top"})
 	settingsMenu = Collection([
 		Box((10, 10, width - 20, height - 20), (ChangeColorBrightness(darkGray, 40), darkWhite), drawData={"roundedCorners": True, "roundness": 24}, lists=[]),
 		Label((width // 2 - 200, 20, 400, 100), (lightBlack, darkWhite), text="Settings", textData={"fontSize": 50}, drawData={"roundedCorners": True, "roundness": 4}, lists=[]),
-		# volume slider for sounds - add sounds
-		# change keybinds - maybe put in how to play instead
-		# difficulty - can only be changed in main menu but can still view in pause menu
+		Label((50, 150, 400, 50), (lightBlack, darkWhite), text="Key Binds", drawData={"roundedCorners": True, "roundness": 5}, lists=[]),
+		changingKeyBindMessage,
+		Collection([
+			Label((50, 210, 195, 50), (lightBlack, darkWhite), text="Move Left", lists=[]),
+			Button((255, 210, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["left"]), name="left", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["left"]),
+			Label((50, 270, 195, 50), (lightBlack, darkWhite), text="Move Right", lists=[]),
+			Button((255, 270, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["right"]), name="right", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["right"]),
+			Label((50, 330, 195, 50), (lightBlack, darkWhite), text="Jump", lists=[]),
+			Button((255, 330, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["jump"]), name="jump", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["jump"]),
+			Label((50, 390, 195, 50), (lightBlack, darkWhite), text="Climb Up", lists=[]),
+			Button((255, 390, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["climbUp"]), name="climbUp", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["climbUp"]),
+			Label((50, 450, 195, 50), (lightBlack, darkWhite), text="Climb Down", lists=[]),
+			Button((255, 450, 195, 50), (lightBlack, darkWhite, lightBlue), text=Settings.GetKeyName(Player.keyBinds["climbDown"]), name="climbDown", lists=[], onClick=Settings.StartChangeKeyBind, onClickArgs=["climbDown"]),
+			], name="keyBinds"),
+		Button((50, 570, 195, 50), (lightBlack, darkWhite, lightBlue), text="Reset keybinds", onClick=Settings.ResetKeybinds, lists=[]),
+		Slider((500, 200, 400, 50), (lightBlack, darkWhite), name="master", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Master Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.master, "onValueChange": SoundManager.ChangeMasterVolume}),
+		Slider((500, 320, 400, 50), (lightBlack, darkWhite), name="sfx", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "SFX Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.sfx, "onValueChange": SoundManager.ChangeSFXVolume}),
+		Slider((500, 440, 400, 50), (lightBlack, darkWhite), name="music", buttonData={"backgroundColor": lightBlack, "inactiveColor": darkWhite, "activeColor": lightBlue}, lists=[], drawData={"header": "Music Volume", "roundedCorners": True, "roundness": 10}, inputData={"startingValue": SoundManager.music, "onValueChange": SoundManager.ChangeMusicVolume}),
 		Button((width - 145, height - 85, 120, 60), (lightBlack, darkWhite, lightBlue), text="Close", drawData={"roundedCorners": True, "roundness": 8}, onClick=CloseSettings, lists=[]),
 		])
 
@@ -1224,6 +1411,8 @@ def HandleEvents(event):
 	HandleGui(event)
 
 	MainMenu.HandleEvent(event)
+	if Settings.isChangingKeyBind:
+		Settings.ChangeKeyBind(event)
 
 	PauseMenu.HandleEvent(event)
 
@@ -1248,21 +1437,26 @@ Platform((width, 0, 12, height), (lightBlack, darkWhite), name="rightWall")
 centerMarker = GameObject((width // 3, 0, 10, 10))
 
 gameTimer = GameTimer()
+fpsLbl = Label((0, 0, 100, 50), (lightBlack, darkWhite), str(fps), textData={"fontSize": 12, "alignText": "left-top"}, drawData={"drawBackground": False, "drawBorder": False})
 
 
 while running:
 	clock.tick_busy_loop(fps)
 	deltaTime = clock.get_time()
+	fpsLbl.UpdateText(f"{round(clock.get_fps())}")
 
 	for event in pg.event.get():
 		if event.type == pg.QUIT:
 			Quit()
 		if event.type == pg.KEYDOWN:
-			if event.key == pg.K_ESCAPE:
-				Quit()
+			if not Settings.isChangingKeyBind:
+				if event.key == pg.K_ESCAPE:
+					Quit()
 
 		HandleEvents(event)
 
 	Update()
 
 	DrawLoop()
+
+pg.quit()
