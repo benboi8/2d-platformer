@@ -389,7 +389,7 @@ class Platform(BoxObj):
 class Stairs:
 	allStairs = []
 	
-	def __init__(self, rect, colors, stepRect, imagePath=None, name="", drawData={}, lists=[allObjs, allStairs]):
+	def __init__(self, rect, colors, stepRect=(10, 20, 3, 1), imagePath=None, name="", drawData={}, lists=[allObjs, allStairs]):
 		self.rect = pg.Rect(rect)
 
 		self.backgroundColor = colors[0]
@@ -404,7 +404,7 @@ class Stairs:
 		AddToListOrDict(lists, self)
 
 		self.steps = [Platform((self.rect.x + (i * self.stepRect[0]), (self.rect.y - (i * self.stepRect[2] * self.stepRect[3])) + (self.rect.h if self.stepRect[3] == 1 else 0), self.stepRect[0], self.stepRect[1]), colors, imagePath, drawData={"borderWidth": 1}) for i in range(self.rect.w // self.stepRect[0])]
-
+		
 	def Move(self, direction):
 		if direction[0]:
 			if not Player.colliding["right"]:
@@ -415,6 +415,7 @@ class Stairs:
 
 	def Draw(self):
 		pg.draw.rect(screen, red, self.rect)
+		DrawRectOutline(black, (self.rect.x - 2, self.rect.y - 2, self.rect.w + 4, self.rect.h + 4))
 		if self.stepRect[3] == -1:
 			pg.draw.aaline(screen, black, (self.rect.x, self.rect.y), (self.rect.x + self.rect.w, self.rect.y + self.rect.h))
 		if self.stepRect[3] == 1:
@@ -429,11 +430,10 @@ class Ladder(Box):
 
 		self.image = Image(self.rect, imagePath, lists=[])
 
+	def Draw(self):
 		numOfRungs = self.rect.h // 20
 		spacing = self.rect.h // numOfRungs
 		self.rungs = [pg.Rect(self.rect.x, self.rect.y + (i * spacing), self.rect.w, 4) for i in range(numOfRungs)]
-
-	def Draw(self):
 		self.DrawBackground()
 		self.DrawBorder()		
 		
@@ -1024,7 +1024,7 @@ class GameTimer:
 
 
 class SoundManager:
-	master = 1
+	master = 0
 	sfx = 1
 	music = 0.6
 
@@ -1034,7 +1034,8 @@ class SoundManager:
 	menuFile = "menu.mp3"
 
 	musicChannel = pg.mixer.Channel(0)
-	musicChannel.play(pg.mixer.Sound(musicFolder + menuFile), loops=-1)
+	if __name__ == "__main__":
+		musicChannel.play(pg.mixer.Sound(musicFolder + menuFile), loops=-1)
 	musicChannel.set_volume(master * music)
 
 	sfxChannels = [pg.mixer.Channel(i) for i in range(1, 5)]
@@ -1415,6 +1416,9 @@ def DrawLoop():
 	for img in Image.allImages:
 		img.Draw()
 
+	for stair in Stairs.allStairs:
+		stair.Draw()
+
 	for platform in Platform.allPlatforms:
 		DrawObj(platform)
 	
@@ -1472,6 +1476,7 @@ def Update():
 		Player.Update()
 
 		gameTimer.Update()
+
 
 if __name__ == "__main__":
 	floor = Platform((0, Y, width, 20), (lightBlack, darkWhite), name="floor")

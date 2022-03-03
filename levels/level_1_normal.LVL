@@ -7,6 +7,7 @@ coinColors[(128,128,0),(255,255,0)]coinColors
 waterColors[(4,179,255),(4,179,255)]waterColors
 enemyColors[(153,25,25),(255,41,41)]enemyColors
 endPointColors[(35,35,35),(215,215,215)]endPointColors
+playerColors[(35,35,35),(215,215,215)]playerColors
 
 
 platforms[
@@ -32,6 +33,9 @@ ladders[
 ]ladders
 
 stairs[
+"rect":(10, y - 510, 360, 110),"colors":stairColors,"incline":(10, 20, 3, 1)
+"rect":(400, y - 510, 260, 110),"colors":stairColors,"incline":(10, 20, 3, 1)
+"rect":(700, y - 510, 260, 210),"colors":stairColors,"incline":(10, 20, 3, 1)
 "rect":(1300, y - 110, 360, 110),"colors":stairColors,"incline":(10, 20, 3, 1)
 "rect":(1300, y - 590, 300, 90),"colors":stairColors,"incline":(10, 20, 3, 1)
 "rect":(1700, y - 590, 600, 180),"colors":stairColors,"incline":(10, 20, 3, -1)
@@ -59,3 +63,7 @@ Enemy[
 EndPoint[
 "rect":(2350, y - 510, 30, 30),"colors":endPointColors
 ]EndPoint
+
+Player[
+"rect":(10, y - 65, 20, 50),"colors":playerColors
+]
