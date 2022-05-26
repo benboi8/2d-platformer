@@ -20,8 +20,8 @@ background = darkGray
 
 
 def Quit():
-	global running
-	running = False
+	global RUNNING
+	RUNNING = False
 
 
 def	QuitToMenu():
@@ -192,7 +192,7 @@ class LevelManager:
 
 		fileName = f"level_{LevelManager.levelID}_{LevelManager.difficulty}.{LevelManager.fileExtension}"
 
-		if not CheckFileExists(fileName, LevelManager.folder):
+		if not CheckFileExists(LevelManager.folder + fileName):
 			return
 
 		with open(LevelManager.folder + fileName) as file:
@@ -1023,9 +1023,14 @@ class GameTimer:
 			return msg
 
 
+# manages all sound events and music
 class SoundManager:
+	# default volumes 
+	# controls both music and sfx
 	master = 1
+	# controls only sfx
 	sfx = 1
+	# controls only music
 	music = 0.6
 
 	musicFolder = "music/"
@@ -1033,10 +1038,12 @@ class SoundManager:
 
 	menuFile = "menu.mp3"
 
+	# start playing music on start up
 	musicChannel = pg.mixer.Channel(0)
 	musicChannel.play(pg.mixer.Sound(musicFolder + menuFile), loops=-1)
 	musicChannel.set_volume(master * music)
 
+	# create 5 sound effect channels
 	sfxChannels = [pg.mixer.Channel(i) for i in range(1, 5)]
 
 	def ChangeMasterVolume(value):
@@ -1051,19 +1058,22 @@ class SoundManager:
 		SoundManager.music = min(1, max(0, value))
 		SoundManager.ChangeVolume()
 
+	# set the channels volume for the master, music and sfx volumes
 	def ChangeVolume():
 		SoundManager.musicChannel.set_volume(max(0, min(1, SoundManager.master * SoundManager.music)))
 		for sfx in SoundManager.sfxChannels:
 			sfx.set_volume(max(0, min(1, SoundManager.master * SoundManager.sfx)))
 
+	# play a different music track
 	def PlayMusic(fileName):
-		if CheckFileExists(fileName, SoundManager.musicFolder):
+		if CheckFileExists(SoundManager.musicFolder + fileName):
 			SoundManager.musicChannel.stop()
 			SoundManager.musicChannel.play(pg.mixer.Sound(SoundManager.musicFolder + fileName), loops=-1)
 			SoundManager.musicChannel.set_volume(max(0, min(1, SoundManager.master * SoundManager.music)))
 
+	# play a sound with the next available sfx channel
 	def PlaySound(fileName):
-		if CheckFileExists(fileName, SoundManager.sfxFolder):
+		if CheckFileExists(SoundManager.sfxFolder + fileName):
 			for sfx in SoundManager.sfxChannels:
 				if sfx.get_busy() == False:
 					sfx.play(pg.mixer.Sound(SoundManager.sfxFolder + fileName))
@@ -1482,11 +1492,11 @@ centerMarker = GameObject((width // 3, 0, 10, 10))
 
 gameTimer = GameTimer()
 showFps = False
-fpsLbl = Label((0, 0, 100, 50), (lightBlack, darkWhite), str(fps), textData={"fontSize": 12, "alignText": "left-top"}, drawData={"drawBackground": False, "drawBorder": False}, lists=[])
+fpsLbl = Label((0, 0, 100, 50), (lightBlack, darkWhite), str(FPS), textData={"fontSize": 12, "alignText": "left-top"}, drawData={"drawBackground": False, "drawBorder": False}, lists=[])
 
 
-while running:
-	clock.tick_busy_loop(fps)
+while RUNNING:
+	clock.tick_busy_loop(FPS)
 	deltaTime = clock.get_time()
 	fpsLbl.UpdateText(f"{round(clock.get_fps())}")
 

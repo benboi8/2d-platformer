@@ -333,8 +333,8 @@ class LevelManager:
 		EndPoint.backgroundColor, EndPoint.borderColor = obj["colors"]
 
 	def LoadNextLevel():
-		fileName = f"level_{LevelManager.levelID + 1}_{LevelManager.difficulty}.{LevelManager.fileExtension}"
-		if CheckFileExists(fileName, LevelManager.folder):
+		fileName = f"level_{LevelManager.levelID}_{LevelManager.difficulty}.{LevelManager.fileExtension}"
+		if not CheckFileExists(fileName, LevelManager.folder):
 			LevelManager.UnloadLevel()
 			LevelManager.levelID += 1
 			LevelManager.LoadLevel(LevelManager.levelID)
@@ -885,7 +885,6 @@ class Player:
 		Player.winningMessageBox.messageBox.UpdateText(f"You have beat the level!")
 		Player.isJumping = False
 		Player.direction = [False, False]
-		SoundManager.PlaySound("victory sound.mp3")
 
 	def Update():
 		if not Player.dead or not Player.won and MainMenu.IsMainMenuActive() and not PauseMenu.isGamePaused:
@@ -1025,7 +1024,7 @@ class GameTimer:
 
 
 class SoundManager:
-	master = 0.1
+	master = 0
 	sfx = 1
 	music = 0.6
 
@@ -1489,6 +1488,7 @@ if __name__ == "__main__":
 	gameTimer = GameTimer()
 	showFps = False
 	fpsLbl = Label((0, 0, 100, 50), (lightBlack, darkWhite), str(fps), textData={"fontSize": 12, "alignText": "left-top"}, drawData={"drawBackground": False, "drawBorder": False}, lists=[])
+
 
 	while running:
 		clock.tick_busy_loop(fps)
